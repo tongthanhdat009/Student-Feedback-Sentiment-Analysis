@@ -25,7 +25,8 @@ import yaml
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-from torch.nn.utils.rnn import pad_sequence
+from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
+from torch.cuda.amp import autocast, GradScaler
 from sklearn.metrics import accuracy_score, f1_score, classification_report
 from collections import Counter
 from tqdm import tqdm
@@ -98,14 +99,17 @@ class SentimentDataset(Dataset):
 
 
 def collate_fn(batch):
-    """Pad sequences to same length"""
+    """Pad sequences to same length and return lengths for packing"""
     texts, labels = zip(*batch)
+    
+    # Lấy độ dài thực tế của từng sequence
+    lengths = torch.tensor([len(t) for t in texts])
     
     # Pad sequences
     texts_padded = pad_sequence(texts, batch_first=True, padding_value=0)
     labels = torch.stack(labels)
     
-    return texts_padded, labels
+    return texts_padded, labels, lengths
 
 
 class LSTMClassifier(nn.Module):
@@ -122,14 +126,22 @@ class LSTMClassifier(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(hidden_dim * 2, num_classes)  # *2 for bidirectional
     
-    def forward(self, x):
+    def forward(self, x, lengths):
         # x: (batch, seq_len)
         embedded = self.embedding(x)  # (batch, seq_len, embed_dim)
         
+        # Pack sequence để LSTM bỏ qua padding (tăng tốc xử lý)
+        # lengths phải được chuyển sang CPU cho pack_padded_sequence
+        packed_embedded = pack_padded_sequence(embedded, lengths.cpu(), batch_first=True, enforce_sorted=False)
+        
         # LSTM
-        lstm_out, (hidden, cell) = self.lstm(embedded)
+        packed_output, (hidden, cell) = self.lstm(packed_embedded)
+        
+        # Unpack (nếu cần output cho từng step, nhưng ở đây chỉ cần hidden state cuối)
+        # output, output_lengths = pad_packed_sequence(packed_output, batch_first=True)
         
         # Concatenate forward and backward hidden states
+        # hidden shape: (num_layers * num_directions, batch, hidden_dim)
         hidden = torch.cat((hidden[-2], hidden[-1]), dim=1)
         
         # Dropout and FC
@@ -156,22 +168,33 @@ def load_processed_data(config):
     return data
 
 
-def train_epoch(model, dataloader, criterion, optimizer):
-    """Train một epoch"""
+def train_epoch(model, dataloader, criterion, optimizer, scaler=None):
+    """Train một epoch với Mixed Precision"""
     model.train()
     total_loss = 0
     all_preds = []
     all_labels = []
     
-    for texts, labels in dataloader:
-        texts = texts.to(device)
-        labels = labels.to(device)
+    for texts, labels, lengths in dataloader:
+        texts = texts.to(device, non_blocking=True)
+        labels = labels.to(device, non_blocking=True)
         
         optimizer.zero_grad()
-        outputs = model(texts)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
+        
+        # Mixed Precision Forward
+        with autocast():
+            outputs = model(texts, lengths)
+            loss = criterion(outputs, labels)
+        
+        # Mixed Precision Backward
+        scaler.scale(loss).backward()
+        
+        # Unscale & Clip Gradients
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
+        scaler.step(optimizer)
+        scaler.update()
         
         total_loss += loss.item()
         preds = outputs.argmax(dim=1)
@@ -189,9 +212,12 @@ def evaluate(model, dataloader):
     all_labels = []
     
     with torch.no_grad():
-        for texts, labels in dataloader:
-            texts = texts.to(device)
-            outputs = model(texts)
+        for texts, labels, lengths in dataloader:
+            texts = texts.to(device, non_blocking=True)
+            
+            with autocast():
+                outputs = model(texts, lengths)
+            
             preds = outputs.argmax(dim=1)
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.numpy())
@@ -274,9 +300,36 @@ def main():
     
     # Create dataloaders
     batch_size = lstm_config.get("batch_size", 32)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, collate_fn=collate_fn) if val_dataset else None
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, collate_fn=collate_fn) if test_dataset else None
+    if device.type == 'cuda':
+        batch_size = 64  # Tăng batch size cho LSTM
+        print(f"  ⚡ Increased batch_size to {batch_size} for GPU speedup")
+        
+    num_workers = 2 if device.type == 'cuda' else 0
+    pin_memory = device.type == 'cuda'
+        
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=batch_size, 
+        shuffle=True, 
+        collate_fn=collate_fn,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+    )
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=batch_size, 
+        collate_fn=collate_fn,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+    ) if val_dataset else None
+    
+    test_loader = DataLoader(
+        test_dataset, 
+        batch_size=batch_size, 
+        collate_fn=collate_fn,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+    ) if test_dataset else None
     
     # Create model
     print("\n🤖 Creating LSTM model...")
@@ -298,13 +351,18 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=lstm_config.get("learning_rate", 0.001))
     epochs = lstm_config.get("epochs", 20)
     
+    # Scaler for AMP
+    scaler = GradScaler()
+    
     # Train
     print(f"\n🏋️ Training for {epochs} epochs...")
+    print(f"  ⚡ Mixed Precision Training: ENABLED")
+    
     results = {"train_history": [], "val_history": []}
     best_val_acc = 0
     
     for epoch in range(epochs):
-        train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer)
+        train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, scaler=scaler)
         results["train_history"].append({"loss": train_loss, "accuracy": train_acc})
         
         log = f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}"

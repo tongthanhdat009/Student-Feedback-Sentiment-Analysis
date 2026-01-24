@@ -24,6 +24,7 @@ import yaml
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from torch.cuda.amp import autocast, GradScaler  # Mixed Precision
 from sklearn.metrics import accuracy_score, f1_score, classification_report
 from tqdm import tqdm
 
@@ -43,35 +44,46 @@ def load_config():
         return yaml.safe_load(f)
 
 
-class PhoBERTDataset(Dataset):
-    """Dataset cho PhoBERT"""
-    def __init__(self, texts, labels, tokenizer, max_length=256):
+    """Dataset cho PhoBERT (trả về raw text để collate_fn xử lý dynamic padding)"""
+    def __init__(self, texts, labels, tokenizer):
         self.texts = texts
         self.labels = labels
         self.tokenizer = tokenizer
-        self.max_length = max_length
     
     def __len__(self):
         return len(self.texts)
     
     def __getitem__(self, idx):
-        text = self.texts[idx]
-        label = self.labels[idx]
-        
-        # Tokenize
-        encoding = self.tokenizer(
-            text,
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_tensors="pt"
-        )
-        
         return {
-            "input_ids": encoding["input_ids"].squeeze(),
-            "attention_mask": encoding["attention_mask"].squeeze(),
-            "label": torch.tensor(label, dtype=torch.long)
+            "text": self.texts[idx],
+            "label": torch.tensor(self.labels[idx], dtype=torch.long)
         }
+
+
+def dynamic_collate_fn(batch):
+    """Dynamic padding: chỉ padding đến độ dài lớn nhất trong batch hiện tại"""
+    texts = [item["text"] for item in batch]
+    labels = torch.stack([item["label"] for item in batch])
+    
+    # Tokenizer tự động xử lý dynamic padding khi padding=True và truncation=True
+    # Nó sẽ pad đến độ dài của câu dài nhất trong batch, thay vì max_length cố định
+    tokenizer = batch_dataset.tokenizer
+    max_len = batch_dataset.max_len if hasattr(batch_dataset, 'max_len') else 256
+    
+    encoding = tokenizer(
+        texts,
+        padding=True,            # Pad to largest in batch
+        truncation=True,         # Truncate to max model length
+        max_length=max_len,
+        return_tensors="pt"
+    )
+    
+    return {
+        "input_ids": encoding["input_ids"],
+        "attention_mask": encoding["attention_mask"],
+        "label": labels
+    }
+
 
 
 def load_processed_data(config):
@@ -91,25 +103,39 @@ def load_processed_data(config):
     return data
 
 
-def train_epoch(model, dataloader, criterion, optimizer, scheduler=None):
-    """Train một epoch"""
+def train_epoch(model, dataloader, criterion, optimizer, scheduler=None, scaler=None):
+    """Train một epoch với Mixed Precision"""
     model.train()
     total_loss = 0
     all_preds = []
     all_labels = []
     
+    # Sử dụng global batch_dataset để collate_fn truy cập tokenizer
+    global batch_dataset
+    
     progress = tqdm(dataloader, desc="Training")
     for batch in progress:
-        input_ids = batch["input_ids"].to(device)
-        attention_mask = batch["attention_mask"].to(device)
-        labels = batch["label"].to(device)
+        input_ids = batch["input_ids"].to(device, non_blocking=True)
+        attention_mask = batch["attention_mask"].to(device, non_blocking=True)
+        labels = batch["label"].to(device, non_blocking=True)
         
         optimizer.zero_grad()
-        outputs = model(input_ids, attention_mask=attention_mask)
-        logits = outputs.logits
-        loss = criterion(logits, labels)
-        loss.backward()
-        optimizer.step()
+        
+        # Mixed Precision Forward
+        with autocast():
+            outputs = model(input_ids, attention_mask=attention_mask)
+            logits = outputs.logits
+            loss = criterion(logits, labels)
+        
+        # Mixed Precision Backward
+        scaler.scale(loss).backward()
+        
+        # Gradient Clipping (unscale trước khi clip)
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
+        scaler.step(optimizer)
+        scaler.update()
         
         if scheduler:
             scheduler.step()
@@ -119,25 +145,30 @@ def train_epoch(model, dataloader, criterion, optimizer, scheduler=None):
         all_preds.extend(preds.cpu().numpy())
         all_labels.extend(labels.cpu().numpy())
         
-        progress.set_postfix({"loss": loss.item()})
+        progress.set_postfix({"loss": f"{loss.item():.4f}"})
     
     acc = accuracy_score(all_labels, all_preds)
     return total_loss / len(dataloader), acc
 
 
 def evaluate(model, dataloader):
-    """Evaluate model"""
+    """Evaluate model với Mixed Precision"""
     model.eval()
     all_preds = []
     all_labels = []
     
+    global batch_dataset
+    
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Evaluating"):
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
+            input_ids = batch["input_ids"].to(device, non_blocking=True)
+            attention_mask = batch["attention_mask"].to(device, non_blocking=True)
             labels = batch["label"]
             
-            outputs = model(input_ids, attention_mask=attention_mask)
+            # Autocast cho inference giúp nhanh hơn
+            with autocast():
+                outputs = model(input_ids, attention_mask=attention_mask)
+            
             preds = outputs.logits.argmax(dim=1)
             
             all_preds.extend(preds.cpu().numpy())
@@ -191,14 +222,17 @@ def main():
     model = model.to(device)
     
     # Create datasets
+    # Create datasets
     print("\n📦 Creating datasets...")
-    max_length = phobert_config.get("max_length", 256)
+    # Tối ưu hóa: Giảm max_length xuống 128 (đủ cho feedback sinh viên)
+    # Config gốc có thể là 256, ta override nếu cần tốc độ
+    max_length = phobert_config.get("max_length", 128) 
+    print(f"  ⚡ Using max_length={max_length} (Dynamic Padding enabled)")
     
     train_dataset = PhoBERTDataset(
         data["train"]["clean_sentence"].tolist(),
         data["train"]["sentiment"].tolist(),
-        tokenizer,
-        max_length
+        tokenizer
     )
     
     val_dataset = None
@@ -206,8 +240,7 @@ def main():
         val_dataset = PhoBERTDataset(
             data["validation"]["clean_sentence"].tolist(),
             data["validation"]["sentiment"].tolist(),
-            tokenizer,
-            max_length
+            tokenizer
         )
     
     test_dataset = None
@@ -215,33 +248,73 @@ def main():
         test_dataset = PhoBERTDataset(
             data["test"]["clean_sentence"].tolist(),
             data["test"]["sentiment"].tolist(),
-            tokenizer,
-            max_length
+            tokenizer
         )
     
+    # Global variable để collate_fn truy cập
+    global batch_dataset
+    batch_dataset = train_dataset
+    batch_dataset.max_len = max_length
+    
     # Create dataloaders
+    # Tối ưu hóa: Tăng batch_size gấp đôi nhờ Mixed Precision
     batch_size = phobert_config.get("batch_size", 16)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size) if val_dataset else None
-    test_loader = DataLoader(test_dataset, batch_size=batch_size) if test_dataset else None
+    if device.type == 'cuda':
+        batch_size = 32  # An toàn cho T4 GPU
+        print(f"  ⚡ Increased batch_size to {batch_size} for GPU speedup")
+    
+    num_workers = 2 if device.type == 'cuda' else 0
+    pin_memory = device.type == 'cuda'
+    
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=batch_size, 
+        shuffle=True,
+        collate_fn=dynamic_collate_fn,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+    )
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=batch_size,
+        collate_fn=dynamic_collate_fn,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+    ) if val_dataset else None
+    
+    test_loader = DataLoader(
+        test_dataset, 
+        batch_size=batch_size,
+        collate_fn=dynamic_collate_fn,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+    ) if test_dataset else None
     
     # Training setup
     criterion = nn.CrossEntropyLoss()
     lr = phobert_config.get("learning_rate", 2e-5)
-    # Đảm bảo learning rate là float (YAML có thể load 2e-5 như string)
     if isinstance(lr, str):
         lr = float(lr)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
     epochs = phobert_config.get("epochs", 5)
     
+    # Scaler cho Mixed Precision
+    scaler = GradScaler()
+    
     # Train
     print(f"\n🏋️ Training for {epochs} epochs...")
+    print(f"  ⚡ Mixed Precision Training: ENABLED")
+    
     results = {"train_history": [], "val_history": []}
     best_val_acc = 0
     
     for epoch in range(epochs):
+        # Clear cache trước mỗi epoch
+        if device.type == 'cuda':
+            torch.cuda.empty_cache()
+            
         print(f"\n📌 Epoch {epoch+1}/{epochs}")
-        train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer)
+        train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, scaler=scaler)
         results["train_history"].append({"loss": train_loss, "accuracy": train_acc})
         
         log = f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}"
