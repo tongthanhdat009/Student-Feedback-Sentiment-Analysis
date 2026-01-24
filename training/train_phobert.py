@@ -29,6 +29,7 @@ from tqdm import tqdm
 
 # Import từ utils để sử dụng cache
 from utils.cache_manager import load_phobert_model, get_model_cache_dir
+from utils.report_generator import generate_training_report
 
 # Load config
 CONFIG_PATH = ROOT_DIR / "configs" / "config.yaml"
@@ -275,6 +276,17 @@ def main():
     
     # Save
     save_model(model, tokenizer, results, config)
+    
+    # Lưu classification report vào results
+    if test_loader:
+        report = classification_report(test_labels, test_preds, target_names=["Negative", "Neutral", "Positive"])
+        results["classification_report"] = report
+    
+    # Tạo báo cáo và lưu vào file text
+    try:
+        generate_training_report("phobert", results, phobert_config)
+    except Exception as e:
+        print(f"⚠️ Không thể tạo report: {e}")
     
     print(f"\n{'='*60}")
     print("✅ PhoBERT TRAINING COMPLETE!")

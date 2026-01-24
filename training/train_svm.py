@@ -23,6 +23,9 @@ import yaml
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
 
+# Import report generator
+from utils.report_generator import generate_training_report
+
 # Load config
 CONFIG_PATH = ROOT_DIR / "configs" / "config.yaml"
 
@@ -172,6 +175,15 @@ def main():
     
     # Save
     save_model(model, results, config)
+    
+    # Lấy config cho SVM
+    svm_config = config.get("models", {}).get("svm", {})
+    
+    # Tạo báo cáo và lưu vào file text
+    try:
+        generate_training_report("svm", results, svm_config)
+    except Exception as e:
+        print(f"⚠️ Không thể tạo report: {e}")
     
     print(f"\n{'='*60}")
     print("✅ SVM TRAINING COMPLETE!")

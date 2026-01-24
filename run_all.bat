@@ -73,20 +73,27 @@ if %ERRORLEVEL% NEQ 0 (
 echo.
 
 REM ============================================================
-REM Step 5: Run Dashboard
+REM Step 5: Visualization & Summary Report
 REM ============================================================
 echo ============================================================
-echo [5/5] LAUNCHING DASHBOARD
+echo [5/5] VISUALIZATION ^& SUMMARY REPORT
 echo ============================================================
 echo.
-echo Dashboard starting at: http://localhost:8501
-echo Press Ctrl+C to stop
+echo Generating summary report...
+python -c "from utils.report_generator import generate_summary_report; generate_summary_report()"
 echo.
-
-streamlit run dashboard/app.py
+echo All results saved to:
+echo   - Reports: results/*.txt
+echo   - Models:  saved_models/*/
+echo.
 
 echo.
 echo ============================================================
 echo COMPLETE!
 echo ============================================================
+echo.
+echo To view charts on Google Colab, use:
+echo   from visualization.colab_visualize import show_all_results
+echo   show_all_results()
+echo.
 pause

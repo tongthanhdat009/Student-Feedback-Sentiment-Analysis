@@ -34,8 +34,8 @@ python training/train_svm.py
 python training/train_lstm.py
 python training/train_phobert.py
 
-# Run dashboard
-streamlit run dashboard/app.py
+# Visualization (dùng matplotlib)
+python visualization/colab_visualize.py
 ```
 
 ## 📁 Cấu trúc thư mục
@@ -61,7 +61,6 @@ project/
 ├── training/                 # Scripts huấn luyện
 ├── evaluation/               # Đánh giá models
 ├── visualization/            # Biểu đồ (Matplotlib)
-├── dashboard/                # Streamlit dashboard
 ├── inference/                # Suy luận và API
 ├── configs/                  # Cấu hình
 ├── utils/                    # Utility functions
@@ -109,18 +108,25 @@ python data/download_dataset.py
 | **LSTM** | Long Short-Term Memory | Deep Learning |
 | **PhoBERT** | Vietnamese BERT | State-of-the-art |
 
-## 📈 Dashboard
+## 📈 Visualization
 
-Dashboard Streamlit với các visualization:
+Visualization sử dụng **Matplotlib** (có thể chạy trên Google Colab):
 
 - **Model Comparison**: So sánh Accuracy/F1 các models
-- **Sentiment Distribution**: Phân bố cảm xúc
-- **Aspect-wise Sentiment**: Cảm xúc theo từng khía cạnh
-- **Demo Prediction**: Demo dự đoán trực tiếp
+- **Training History**: Loss và Accuracy qua từng epoch
+- **Class Distribution**: Phân bố cảm xúc trong dataset
+- **Confusion Matrix**: Ma trận nhầm lẫn
 
+### Trên Google Colab:
+```python
+%matplotlib inline
+from visualization.colab_visualize import *
+show_all_results()
+```
+
+### Trên local:
 ```bash
-streamlit run dashboard/app.py
-# Truy cập: http://localhost:8501
+python visualization/colab_visualize.py
 ```
 
 ## 📚 Tham khảo

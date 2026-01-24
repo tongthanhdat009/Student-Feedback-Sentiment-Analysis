@@ -30,6 +30,9 @@ from sklearn.metrics import accuracy_score, f1_score, classification_report
 from collections import Counter
 from tqdm import tqdm
 
+# Import report generator
+from utils.report_generator import generate_training_report
+
 # Load config
 CONFIG_PATH = ROOT_DIR / "configs" / "config.yaml"
 
@@ -336,6 +339,17 @@ def main():
     
     # Save
     save_model(model, vocab, results, config)
+    
+    # Lưu classification report vào results
+    if test_loader:
+        report = classification_report(test_labels, test_preds, target_names=["Negative", "Neutral", "Positive"])
+        results["classification_report"] = report
+    
+    # Tạo báo cáo và lưu vào file text
+    try:
+        generate_training_report("lstm", results, lstm_config)
+    except Exception as e:
+        print(f"⚠️ Không thể tạo report: {e}")
     
     print(f"\n{'='*60}")
     print("✅ LSTM TRAINING COMPLETE!")

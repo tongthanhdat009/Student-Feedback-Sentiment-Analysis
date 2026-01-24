@@ -74,19 +74,25 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host ""
 
 # ============================================================
-# Step 5: Run Dashboard
+# Step 5: Visualization & Summary Report
 # ============================================================
 Write-Host "============================================================" -ForegroundColor Green
-Write-Host "[5/5] LAUNCHING DASHBOARD" -ForegroundColor Green
+Write-Host "[5/5] VISUALIZATION & SUMMARY REPORT" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Dashboard starting at: http://localhost:8501" -ForegroundColor Cyan
-Write-Host "Press Ctrl+C to stop" -ForegroundColor Yellow
+Write-Host "Generating summary report..." -ForegroundColor Cyan
+python -c "from utils.report_generator import generate_summary_report; generate_summary_report()"
 Write-Host ""
-
-streamlit run dashboard/app.py
+Write-Host "All results saved to:" -ForegroundColor Cyan
+Write-Host "  - Reports: results/*.txt" -ForegroundColor Yellow
+Write-Host "  - Models:  saved_models/*/" -ForegroundColor Yellow
+Write-Host ""
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host "COMPLETE!" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "To view charts on Google Colab, use:" -ForegroundColor Cyan
+Write-Host "  from visualization.colab_visualize import show_all_results" -ForegroundColor Yellow
+Write-Host "  show_all_results()" -ForegroundColor Yellow

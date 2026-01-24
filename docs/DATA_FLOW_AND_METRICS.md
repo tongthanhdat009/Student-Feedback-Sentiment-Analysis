@@ -54,8 +54,8 @@
             │
             ▼
      ┌──────────────┐
-     │  Dashboard   │
-     │ (Streamlit)  │
+     │ Visualization│
+     │ (Matplotlib) │
      └──────────────┘
 ```
 
@@ -484,9 +484,9 @@ Lý do:
        ├── Validate each epoch
        └── Output: saved_models/phobert/
 
-6. DASHBOARD
-   └── streamlit run dashboard/app.py
-       └── Visualize all results
+6. VISUALIZATION
+   └── python visualization/colab_visualize.py
+       └── Visualize all results (matplotlib)
 ```
 
 ---
