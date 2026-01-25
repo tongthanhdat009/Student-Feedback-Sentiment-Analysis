@@ -10,124 +10,98 @@ Phân tích cảm xúc phản hồi sinh viên sử dụng dataset **UIT-VSFC** 
 pip install -r requirements.txt
 ```
 
-### 2. Setup Project (Download dataset và cache models)
+### 2. Chạy Jupyter Notebook
+
+Mở file `Student_Feedback_Sentiment_Analysis.ipynb` và chạy từng cell theo thứ tự.
 
 ```bash
-python setup_project.py
+jupyter notebook Student_Feedback_Sentiment_Analysis.ipynb
 ```
 
-Script này sẽ:
-- ✅ Tạo tất cả thư mục cần thiết
-- ✅ Download và cache dataset UIT-VSFC
-- ✅ Download và cache PhoBERT model
+**Hoặc trên Google Colab:**
+- Upload file notebook lên Google Colab
+- Chạy tất cả cells
 
-> 💡 **Lưu ý**: Dataset và models chỉ cần download **một lần**. Các lần chạy sau sẽ load từ cache!
+### 📓 Notebook bao gồm:
+- ✅ Download dataset từ Huggingface API
+- ✅ Exploratory Data Analysis với biểu đồ trực quan
+- ✅ Preprocessing văn bản tiếng Việt
+- ✅ Train các models: SVM, Logistic Regression, Naive Bayes, Random Forest, LSTM, PhoBERT
+- ✅ Đánh giá và so sánh models
+- ✅ Lưu models và kết quả
+- ✅ Inference trên văn bản mới
 
-### 3. Các bước tiếp theo
-
-```bash
-# Preprocessing
-python preprocessing/build_dataset.py
-
-# Train models
-python training/train_svm.py
-python training/train_lstm.py
-python training/train_phobert.py
-
-# Visualization (dùng matplotlib)
-python visualization/colab_visualize.py
-```
+> 💡 **Lưu ý**: Dataset và PhoBERT models được cache tự động trong thư mục `cache/`. Các lần chạy sau sẽ load từ cache!
 
 ## 📁 Cấu trúc thư mục
 
 ```
 project/
 │
-├── data/                      # Dữ liệu
-│   ├── raw/uit_vsfc/         # Dataset gốc (CSV)
-│   └── processed/acsa/       # Dataset đã xử lý
+├── Student_Feedback_Sentiment_Analysis.ipynb  # 📓 Main Notebook
 │
-├── cache/                     # 📦 CACHE (không cần download lại)
+├── cache/                     # 📦 CACHE (tự động tạo)
 │   ├── models/               # PhoBERT model cache
 │   └── datasets/             # Dataset cache
 │
 ├── saved_models/             # 💾 Models đã train
-│   ├── svm/
-│   ├── lstm/
-│   └── phobert/
+│   ├── sklearn/              # ML models (SVM, LR, NB, RF)
+│   ├── lstm_best.pt          # LSTM model
+│   └── phobert_best/         # PhoBERT model
 │
-├── preprocessing/            # Tiền xử lý dữ liệu
-├── models/                   # Định nghĩa models
-├── training/                 # Scripts huấn luyện
-├── evaluation/               # Đánh giá models
-├── visualization/            # Biểu đồ (Matplotlib)
-├── inference/                # Suy luận và API
-├── configs/                  # Cấu hình
-├── utils/                    # Utility functions
+├── results/                  # 📊 Kết quả
+│   ├── figures/              # Biểu đồ PNG
+│   ├── model_comparison.csv  # So sánh models
+│   └── experiment_results.json
 │
 ├── requirements.txt          # Thư viện cần cài
-├── setup_project.py          # Script setup ban đầu
 └── README.md
 ```
 
 ## 🔧 Cấu hình Cache
 
-Đường dẫn cache được cấu hình trong `configs/config.yaml`:
+Models và Dataset được cache tự động:
+- **PhoBERT**: `cache/models/`
+- **Dataset**: `cache/datasets/`
+- **Trained Models**: `saved_models/`
 
-```yaml
-paths:
-  model_cache: "./cache/models"      # Cache PhoBERT
-  dataset_cache: "./cache/datasets"  # Cache dataset
-  saved_models: "./saved_models"     # Models đã train
-```
+## 💻 Yêu cầu hệ thống
 
-### Kiểm tra trạng thái cache
-
-```bash
-python utils/cache_manager.py
-```
+- Python >= 3.8
+- PyTorch >= 1.9.0
+- GPU (khuyến nghị) hoặc CPU
+- RAM >= 8GB
 
 ## 📊 Dataset
 
 **UIT-VSFC** (Vietnamese Students' Feedback Corpus):
+- **Source**: [Huggingface API](https://huggingface.co/datasets/uitnlp/vietnamese_students_feedback)
 - **Sentences**: Phản hồi sinh viên bằng tiếng Việt
 - **Sentiment**: 0 (Negative), 1 (Neutral), 2 (Positive)
 - **Topic**: 0 (Lecturer), 1 (Training Program), 2 (Facility), 3 (Others)
 
-### Download dataset riêng
-
-```bash
-python data/download_dataset.py
-```
-
 ## 🤖 Models
 
-| Model | Mô tả | Mục đích |
-|-------|-------|----------|
-| **SVM** | Support Vector Machine | Baseline |
-| **LSTM** | Long Short-Term Memory | Deep Learning |
-| **PhoBERT** | Vietnamese BERT | State-of-the-art |
+| Model | Type | Mô tả |
+|-------|------|-------|
+| **Logistic Regression** | ML | Baseline model |
+| **SVM** | ML | Support Vector Machine |
+| **Naive Bayes** | ML | Multinomial NB |
+| **Random Forest** | ML | Ensemble method |
+| **LSTM** | Deep Learning | Bidirectional LSTM |
+| **PhoBERT** | Transformer | Vietnamese BERT (State-of-the-art) |
 
 ## 📈 Visualization
 
-Visualization sử dụng **Matplotlib** (có thể chạy trên Google Colab):
-
+Notebook tạo các biểu đồ sau (lưu trong `results/figures/`):
+- **Sentiment Distribution**: Phân bố cảm xúc
+- **Topic Distribution**: Phân bố chủ đề
+- **Sentiment vs Topic Heatmap**: Ma trận tương quan
+- **Text Length Distribution**: Phân bố độ dài văn bản
 - **Model Comparison**: So sánh Accuracy/F1 các models
+- **Confusion Matrices**: Ma trận nhầm lẫn
 - **Training History**: Loss và Accuracy qua từng epoch
-- **Class Distribution**: Phân bố cảm xúc trong dataset
-- **Confusion Matrix**: Ma trận nhầm lẫn
-
-### Trên Google Colab:
-```python
-%matplotlib inline
-from visualization.colab_visualize import *
-show_all_results()
-```
-
-### Trên local:
-```bash
-python visualization/colab_visualize.py
-```
+- **Radar Chart**: So sánh metrics tổng hợp
 
 ## 📚 Tham khảo
 
