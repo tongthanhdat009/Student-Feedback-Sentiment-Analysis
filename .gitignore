@@ -64,3 +64,4 @@ data/raw/uit_vsfc/*.csv
 # Results (nếu cần)
 # results/
 /plan
+*.pt
