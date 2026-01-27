@@ -1,6 +1,0 @@
-Metric,Baseline,Enhanced,Improvement
-Accuracy,0.9356,0.9359,+0.0003
-F1-Score (Macro),0.8264,0.8325,+0.0061
-Precision (Macro),0.8642,0.8534,-0.0108
-Recall (Macro),0.8023,0.8165,+0.0142
-Neutral F1,0.5745,0.5914,+0.0169
