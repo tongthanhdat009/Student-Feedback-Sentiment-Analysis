@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(python:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(dir:*)",
+      "Bash(del:*)"
     ]
   }
 }

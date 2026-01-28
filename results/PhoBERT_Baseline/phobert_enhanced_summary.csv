@@ -1,6 +1,0 @@
-Metric,Validation,Test
-Accuracy,0.9368,0.9305
-F1-Score (Macro),0.8196,0.8036
-Precision (Macro),0.8818,0.8568
-Recall (Macro),0.7867,0.7755
-🎯 Neutral F1,0.5565,0.5132

@@ -65,3 +65,4 @@ data/raw/uit_vsfc/*.csv
 # results/
 /plan
 *.pt
+*.ini
