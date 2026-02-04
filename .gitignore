@@ -66,3 +66,4 @@ data/raw/uit_vsfc/*.csv
 /plan
 *.pt
 *.ini
+/.claude
