@@ -1,0 +1,2 @@
+Model,PhoBERT Model,TF-IDF Features,TF-IDF N-gram,Combined Features,Classifier,Train Accuracy,Val Accuracy,Test Accuracy,Test F1 (weighted)
+Hybrid (PhoBERT + TF-IDF),vinai/phobert-base (pretrained),5000,1-2,5768,Logistic Regression,0.9999124803080693,0.9406190777005685,0.930511686670878,0.9295651154065993
