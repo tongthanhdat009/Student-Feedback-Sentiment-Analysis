@@ -68,3 +68,4 @@ data/raw/uit_vsfc/*.csv
 *.ini
 /.claude
 /.claude
+/desktop.ini

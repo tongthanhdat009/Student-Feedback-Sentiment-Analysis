@@ -1,0 +1,34 @@
+========================================
+TRAINING RESULTS - PhoBERT + TF-IDF Hybrid (Improved)
+========================================
+Date: 2026-03-05 15:01:03
+Model Type: PhoBERT_TF-IDF
+Experiment: improvements/20260305
+
+----------------------------------------
+HYPERPARAMETERS
+----------------------------------------
+PhoBERT Model: vinai/phobert-base
+Max Length: 256
+Batch Size: 32
+TF-IDF Max Features: 3000
+TF-IDF N-gram Range: (1, 3)
+SMOTE Strategy: {0: 5325, 1: 3000, 2: 5643}
+LR C (regularization): 0.1
+XGBoost: n_estimators=200, max_depth=6, learning_rate=0.1
+
+----------------------------------------
+TEST RESULTS (BEST MODEL: XGBoost)
+----------------------------------------
+Test Accuracy: 0.9343
+Test F1 (weighted): 0.9335
+
+Per-Class Metrics (Best Model):
+  Negative: P=0.9459, R=0.9553, F1=0.9506
+  Neutral:  P=0.6447, R=0.5868, F1=0.6144
+  Positive: P=0.9516, R=0.9522, F1=0.9519
+
+All Models Summary:
+  Logistic Regression: Acc=0.9321, F1=0.9310
+  XGBoost: Acc=0.9343, F1=0.9335
+  Late Fusion: Acc=0.9305, F1=0.9289
