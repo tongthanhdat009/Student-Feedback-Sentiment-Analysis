@@ -4,180 +4,428 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Vietnamese Student Feedback Sentiment Analysis using the **UIT-VSFC** dataset. The project implements multiple approaches for 3-class sentiment classification (Negative/Neutral/Positive):
+Vietnamese Student Feedback Sentiment Analysis using the **UIT-VSFC** dataset. The project implements multiple approaches for 3-class sentiment classification (Negative=0/Neutral=1/Positive=2):
 
 - **PhoBERT Baseline**: Fine-tuned vinai/phobert-base transformer
-- **TF-IDF Hybrid**: Combined PhoBERT embeddings + TF-IDF features
-- **Improved Hybrid**: Enhanced version with SMOTE, XGBoost, Late Fusion
+- **TF-IDF Hybrid**: PhoBERT embeddings + TF-IDF features
+- **SentiWordNet Hybrid**: PhoBERT embeddings + 8 sentiment lexicon features
+- **Full Hybrid**: All features combined
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        KIẾN TRÚC HỆ THỐNG PHÂN LOẠI CẢM XÚC                      │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          KHỐI 1: TIỀN XỬ LÝ DỮ LIỆU                             │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  Đầu vào: Bộ dữ liệu UIT-VSFC                                                   │
+│                                                                                 │
+│  ┌──────────────┐    ┌──────────────────┐    ┌───────────────┐                 │
+│  │ Làm sạch    │───▶│ Chuẩn hóa        │───▶│ PhoBERT BPE  │                 │
+│  │ văn bản     │    │ từ ngữ mạng      │    │ Tokenization │                 │
+│  └──────────────┘    └──────────────────┘    └───────────────┘                 │
+│        │                    │                        │                         │
+│        ▼                    ▼                        ▼                         │
+│  - Lowercase          - "ko" → "không"         - Subword tokenization          │
+│  - Remove special     - "j" → "gì"              - Max length: 256              │
+│    characters         - "cx" → "cũng"                                          │
+│  - Normalize          - 100+ teencode mappings                                 │
+│    whitespace                                                                   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        KHỐI 2: TRÍCH XUẤT ĐẶC TRƯNG                             │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────────────────┐      ┌─────────────────────────────┐          │
+│  │     NHÁNH 1: PhoBERT        │      │   NHÁNH 2: Traditional      │          │
+│  │     (Vector ngữ cảnh sâu)   │      │   (Tần suất + Từ điển)      │          │
+│  ├─────────────────────────────┤      ├─────────────────────────────┤          │
+│  │                             │      │                             │          │
+│  │  vinai/phobert-base         │      │  ┌─────────────────────┐   │          │
+│  │  ↓                         │      │  │ TF-IDF              │   │          │
+│  │  [CLS] token extraction    │      │  │ - 3000-5000 features│   │          │
+│  │  ↓                         │      │  │ - n-grams: (1,3)    │   │          │
+│  │  768-dim embedding         │      │  └─────────────────────┘   │          │
+│  │                             │      │           +                 │          │
+│  │  Fine-tuned on UIT-VSFC    │      │  ┌─────────────────────┐   │          │
+│  │                             │      │  │ VietSentiWordNet    │   │          │
+│  │                             │      │  │ - pos_sum, neg_sum  │   │          │
+│  │                             │      │  │ - pos_max, neg_max  │   │          │
+│  │                             │      │  │ - pos_mean, neg_mean│   │          │
+│  │                             │      │  │ - coverage, polarity│   │          │
+│  │                             │      │  │ = 8 features        │   │          │
+│  │                             │      │  └─────────────────────┘   │          │
+│  └─────────────────────────────┘      └─────────────────────────────┘          │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                      KHỐI 3: XÂY DỰNG MÔ HÌNH (LAI GHÉP)                        │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌───────────────────────────────────────────────────────────────────────────┐ │
+│  │                        4 CẤU HÌNH THỰC NGHIỆM                             │ │
+│  ├───────────────────────────────────────────────────────────────────────────┤ │
+│  │                                                                           │ │
+│  │  1. PhoBERT cơ sở          2. PhoBERT + TF-IDF                           │ │
+│  │     ┌─────────┐               ┌─────────┐                                │ │
+│  │     │PhoBERT  │               │PhoBERT  │                                │ │
+│  │     │ 768-dim │               │ 768-dim │                                │ │
+│  │     └────┬────┘               └────┬────┘                                │ │
+│  │          │                         │                                      │ │
+│  │          ▼                    ┌────┴────┐                                 │ │
+│  │     ┌─────────┐               │ TF-IDF  │                                 │ │
+│  │     │Classifier│              │3000-dim │                                 │ │
+│  │     └─────────┘               └────┬────┘                                 │ │
+│  │                                    │                                      │ │
+│  │                                    ▼                                      │ │
+│  │                               ┌──────────┐                                │ │
+│  │                               │Concatenate│                               │ │
+│  │                               │ 3768-dim │                                │ │
+│  │                               └────┬─────┘                                │ │
+│  │                                    │                                      │ │
+│  │                                    ▼                                      │ │
+│  │                               ┌──────────┐                                │ │
+│  │                               │Classifier│                                │ │
+│  │                               └──────────┘                                │ │
+│  │                                                                           │ │
+│  │  3. PhoBERT + SentiWordNet   4. PhoBERT + TF-IDF + SentiWordNet         │ │
+│  │     ┌─────────┐               ┌─────────┐                                │ │
+│  │     │PhoBERT  │               │PhoBERT  │                                │ │
+│  │     │ 768-dim │               │ 768-dim │                                │ │
+│  │     └────┬────┘               └────┬────┘                                │ │
+│  │          │                    ┌────┴────┐                                 │ │
+│  │          │                    │ TF-IDF  │                                 │ │
+│  │    ┌─────┴─────┐              │3000-dim │                                 │ │
+│  │    │SentiWordNet│             └────┬────┘                                 │ │
+│  │    │  8-dim    │              ┌────┴────┐                                 │ │
+│  │    └─────┬─────┘              │SentiWordNet│                              │ │
+│  │          │                    │  8-dim   │                                │ │
+│  │          ▼                    └────┬────┘                                 │ │
+│  │     ┌──────────┐                   │                                      │ │
+│  │     │Concatenate│                  ▼                                      │ │
+│  │     │ 776-dim  │              ┌──────────┐                                │ │
+│  │     └────┬─────┘              │Concatenate│                               │ │
+│  │          │                    │ 3776-dim │                                │ │
+│  │          ▼                    └────┬─────┘                                │ │
+│  │     ┌──────────┐                   │                                      │ │
+│  │     │Classifier│                   ▼                                      │ │
+│  │     └──────────┘              ┌──────────┐                                │ │
+│  │                               │Classifier│                                │ │
+│  │                               └──────────┘                                │ │
+│  └───────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                 │
+│  Classifiers: LogisticRegression, XGBoost                                       │
+│  Loss: CrossEntropyLoss (training PhoBERT)                                      │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        KHỐI 4: ĐÁNH GIÁ & PHÂN TÍCH                             │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐            │
+│  │  Tối ưu hóa     │    │  Phân loại      │    │  Đo lường       │            │
+│  │  CrossEntropy   │───▶│  3 classes      │───▶│  hiệu suất      │            │
+│  └─────────────────┘    └─────────────────┘    └─────────────────┘            │
+│                                                        │                       │
+│                                                        ▼                       │
+│                                              ┌─────────────────────┐          │
+│                                              │ Metrics:            │          │
+│                                              │ - Accuracy          │          │
+│                                              │ - F1-score (macro)  │          │
+│                                              │ - Precision/Recall  │          │
+│                                              │ - Confusion Matrix  │          │
+│                                              └─────────────────────┘          │
+│                                                                                 │
+│  Output: Tích cực (Positive) / Trung tính (Neutral) / Tiêu cực (Negative)      │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Methodology Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                     QUY TRÌNH PHƯƠNG PHÁP PHÂN LOẠI CẢM XÚC                      │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                     GIAI ĐOẠN 1: TIỀN XỬ LÝ DỮ LIỆU                            │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │ Bộ dữ liệu UIT-VSFC                                                      │   │
+│  │ Train: 11,426 | Validation: 1,583 | Test: 3,166                         │   │
+│  └─────────────────────────────────────┬───────────────────────────────────┘   │
+│                                        │                                        │
+│                                        ▼                                        │
+│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐          │
+│  │  Làm sạch văn bản │───▶│Chuẩn hóa teencode│───▶│  Tokenization   │          │
+│  └────────┬─────────┘    └────────┬─────────┘    └────────┬─────────┘          │
+│           │                       │                       │                    │
+│           ▼                       ▼                       ▼                    │
+│    • Lowercase           • ko → không          • PhoBERT BPE                   │
+│    • Remove special      • j → gì              • Subword tokenization          │
+│      characters          • cx → cũng           • Max length: 256              │
+│    • Normalize           • dc → được                                          │
+│      whitespace          • 178+ mappings                                       │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                     GIAI ĐOẠN 2: TRÍCH XUẤT ĐẶC TRƯNG                          │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                │
+│                      ┌─────────────────────────────────────┐                   │
+│                      │    Văn bản đã tiền xử lý            │                   │
+│                      └──────────────┬──────────────────────┘                   │
+│                                     │                                          │
+│           ┌─────────────────────────┼─────────────────────────┐                │
+│           │                         │                         │                │
+│           ▼                         ▼                         ▼                │
+│  ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐           │
+│  │  NHÁNH 1        │     │  NHÁNH 2        │     │  NHÁNH 3        │           │
+│  │  PhoBERT        │     │  TF-IDF         │     │ VietSentiWordNet│           │
+│  ├─────────────────┤     ├─────────────────┤     ├─────────────────┤           │
+│  │                 │     │                 │     │                 │           │
+│  │ vinai/          │     │ 3,000-5,000     │     │ 8 features:     │           │
+│  │ phobert-base    │     │ features        │     │ • pos_sum       │           │
+│  │                 │     │                 │     │ • neg_sum       │           │
+│  │ [CLS] token     │     │ n-grams: (1,3)  │     │ • pos_max       │           │
+│  │ extraction      │     │                 │     │ • neg_max       │           │
+│  │                 │     │ min_df=3        │     │ • pos_mean      │           │
+│  │ 768-dim         │     │ max_df=0.9      │     │ • neg_mean      │           │
+│  │ embedding       │     │                 │     │ • coverage      │           │
+│  │                 │     │                 │     │ • polarity      │           │
+│  └────────┬────────┘     └────────┬────────┘     └────────┬────────┘           │
+│           │                       │                       │                    │
+│           └───────────────────────┼───────────────────────┘                    │
+│                                   │                                            │
+└───────────────────────────────────┼────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                     GIAI ĐOẠN 3: LAI GHÉP ĐẶC TRƯNG                             │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│                        ┌─────────────────────────────┐                         │
+│                        │     Feature Fusion          │                         │
+│                        └──────────────┬──────────────┘                         │
+│                                       │                                         │
+│           ┌───────────────────────────┼───────────────────────────┐            │
+│           │                           │                           │            │
+│           ▼                           ▼                           ▼            │
+│  ┌─────────────────┐     ┌─────────────────────┐     ┌─────────────────┐       │
+│  │  Concatenate    │     │ StandardScaler      │     │  SMOTE          │       │
+│  │  embeddings     │     │ normalization       │     │  (class balance)│       │
+│  └────────┬────────┘     └──────────┬──────────┘     └────────┬────────┘       │
+│           │                         │                         │                │
+│           └─────────────────────────┼─────────────────────────┘                │
+│                                     │                                          │
+│                                     ▼                                          │
+│                        ┌─────────────────────────────┐                         │
+│                        │  Hybrid Feature Vector      │                         │
+│                        │  768 + 5000 + 8 = 5,776 dim │                         │
+│                        └─────────────────────────────┘                         │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                     GIAI ĐOẠN 4: HUẤN LUYỆN MÔ HÌNH                            │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌───────────────────────────────────────────────────────────────────────────┐ │
+│  │                        4 CẤU HÌNH THỰC NGHIỆM                             │ │
+│  ├───────────────────────────────────────────────────────────────────────────┤ │
+│  │                                                                           │ │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐            │ │
+│  │  │ 1. PhoBERT      │  │ 2. PhoBERT+     │  │ 3. PhoBERT+     │            │ │
+│  │  │    Baseline     │  │    TF-IDF       │  │    SentiWordNet │            │ │
+│  │  ├─────────────────┤  ├─────────────────┤  ├─────────────────┤            │ │
+│  │  │                 │  │                 │  │                 │            │ │
+│  │  │ PhoBERT: 768    │  │ PhoBERT: 768    │  │ PhoBERT: 768    │            │ │
+│  │  │                 │  │ TF-IDF: 3000    │  │ SentiWordNet: 8 │            │ │
+│  │  │                 │  │ Total: 3768     │  │ Total: 776      │            │ │
+│  │  └─────────────────┘  └─────────────────┘  └─────────────────┘            │ │
+│  │                                                                           │ │
+│  │  ┌─────────────────────────────────────────────────────────────────────┐  │ │
+│  │  │ 4. Full Hybrid (PhoBERT + TF-IDF + SentiWordNet)                   │  │ │
+│  │  ├─────────────────────────────────────────────────────────────────────┤  │ │
+│  │  │ PhoBERT: 768 | TF-IDF: 3000 | SentiWordNet: 8 | Total: 3,776 dim   │  │ │
+│  │  └─────────────────────────────────────────────────────────────────────┘  │ │
+│  │                                                                           │ │
+│  └───────────────────────────────────────────────────────────────────────────┘ │
+│                                     │                                          │
+│                                     ▼                                          │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                        CLASSIFIERS                                       │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐             │   │
+│  │  │ Logistic       │  │ XGBoost        │  │ Late Fusion    │             │   │
+│  │  │ Regression     │  │                │  │ (Ensemble)     │             │   │
+│  │  └────────────────┘  └────────────────┘  └────────────────┘             │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                     │                                          │
+│                                     ▼                                          │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                        LOSS FUNCTION                                     │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │  CrossEntropyLoss | Optimizer: AdamW | Learning Rate: 2e-5             │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                     GIAI ĐOẠN 5: ĐÁNH GIÁ                                       │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                        METRICS                                           │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │  • Accuracy           • Precision (per class)                           │   │
+│  │  • F1-score (macro)   • Recall (per class)                              │   │
+│  │  • Confusion Matrix                                                     │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                     │                                          │
+│                                     ▼                                          │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                        KẾT QUẢ PHÂN LOẠI                                  │   │
+│  ├─────────────────────────────────────────────────────────────────────────┤   │
+│  │  ┌───────────────┐    ┌───────────────┐    ┌───────────────┐            │   │
+│  │  │   POSITIVE    │    │   NEUTRAL     │    │   NEGATIVE    │            │   │
+│  │  │   (Tích cực)  │    │   (Trung tính)│    │   (Tiêu cực) │            │   │
+│  │  │   Label: 2    │    │   Label: 1    │    │   Label: 0   │            │   │
+│  │  └───────────────┘    └───────────────┘    └───────────────┘            │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
 
 ## Running Notebooks
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
-
-# Start Jupyter (notebooks are in notebook/ directory)
 jupyter notebook
 ```
 
-**Note**: Notebooks are configured for Google Colab with paths like `/content/drive/MyDrive/Student-Feedback-Sentiment-Analysis`. When running locally, update the `BASE_DIR` in Config classes to use relative paths.
+**Note**: Notebooks are configured for Google Colab with paths like `/content/drive/MyDrive/Student-Feedback-Sentiment-Analysis`. When running locally, update `BASE_DIR` in Config classes.
 
 ## Data Structure
 
 ```
 data/
-├── processed/
-│   ├── train/
-│   │   ├── sents.txt          # Vietnamese text samples
-│   │   └── sentiments.txt     # Labels: 0=Negative, 1=Neutral, 2=Positive
-│   ├── validation/
-│   └── test/
-└── raw/                        # Original UIT-VSFC data
+├── processed/{train,validation,test}/   # sents.txt, sentiments.txt, topics.txt
+├── raw/                                  # Original UIT-VSFC data
+└── sentiwordnet-dataset/                 # VietSentiWordnet_Ver1.3.5.txt
 ```
 
-**Dataset Statistics**:
-- Train: 11,426 samples (Neutral class only 4% - heavily imbalanced)
-- Validation: 1,583 samples
-- Test: 3,166 samples
+**Dataset**: Train 11,426 / Val 1,583 / Test 3,166 samples. **Class imbalance**: Neutral is only 4% of training data.
 
-## Model Architecture
+## Data Utilities Module
 
-### PhoBERT Baseline ([notebook/PhoBERT_Baseline.ipynb](notebook/PhoBERT_Baseline.ipynb))
-- Base: `vinai/phobert-base` (135M params)
-- Classification head: Linear(768 → 3)
-- Loss: CrossEntropyLoss
-- Training: AdamW, lr=2e-5, warmup=10%, early stopping patience=5
+Use `src/data_utils.py` for centralized data handling:
 
-### TF-IDF Hybrid ([notebook/TF-IDF_Model.ipynb](notebook/TF-IDF_Model.ipynb))
-- **Feature extraction**:
-  - PhoBERT frozen embeddings (768-dim from [CLS] token)
-  - TF-IDF (5000 features, 1-2 grams)
-  - Combined: 5768 features
-- **Original**: LogisticRegression(C=1.0)
-- **Improved versions**:
-  - LR + SMOTE (C=0.1)
-  - XGBoost + SMOTE (best: F1=0.932)
-  - Late Fusion (separate PhoBERT/TF-IDF models, weighted predictions)
+```python
+from src.data_utils import (
+    load_data,              # Load UIT-VSFC split
+    load_all_splits,        # Load all splits at once
+    load_sentiwordnet,      # Load VietSentiWordNet lexicon
+    normalize_teencode,     # Normalize Vietnamese internet slang
+    preprocess_vietnamese,  # Full Vietnamese text preprocessing
+    get_swn_features,       # Extract 8 SentiWordNet features
+    extract_swn_features_batch,  # Batch feature extraction
+    SWN_FEATURE_NAMES,      # ['pos_sum', 'neg_sum', ...]
+    LABEL_MAP,              # {0: 'Negative', 1: 'Neutral', 2: 'Positive'}
+)
 
-## Model Versioning
+# Example usage
+texts, labels = load_data('data/processed', 'train')
+word_to_scores = load_sentiwordnet('data/sentiwordnet-dataset/VietSentiWordnet_Ver1.3.5.txt')
+features = get_swn_features(texts[0], word_to_scores)  # Returns 8 features
 
-Models are organized hierarchically by model type and experiment type:
-
-```
-results/
-├── PhoBERT/
-│   ├── baseline/                   # Original PhoBERT (reference)
-│   └── improvements/               # Enhanced versions with timestamp
-├── PhoBERT_TF-IDF/
-│   ├── baseline/                   # Original hybrid
-│   └── improvements/               # SMOTE, XGBoost, etc.
-├── PhoBERT_Sentiwordnet/
-│   ├── baseline/
-│   └── improvements/
-└── PhoBERT_TF-IDF_Sentiwordnet/
-    ├── baseline/
-    └── improvements/
+# Normalize teencode
+normalized = normalize_teencode("ko bt j cả")  # -> "không biết gì cả"
 ```
 
-**Key**: Baseline folders have NO timestamp. Improvement folders use YYYYMMDD timestamps.
+## Notebooks
 
-## File Naming Conventions
+| Notebook | Description |
+|----------|-------------|
+| `EDA.ipynb` | Exploratory data analysis |
+| `PhoBERT_Baseline.ipynb` | Fine-tuned PhoBERT (768-dim, CrossEntropyLoss) |
+| `PhoBERT_TF-IDF_Baseline.ipynb` | PhoBERT + TF-IDF (5768 features) |
+| `PhoBERT_Sentiwordnet_Baseline.ipynb` | PhoBERT + 8 SentiWordNet features (776-dim) |
+| `PhoBERT_TF-IDF_Sentiwordnet_Baseline.ipynb` | All features combined |
 
-### Result Files (with timestamp)
-When creating new result files, **always add a timestamp** to track iterations:
+## Key Hyperparameters
 
-```
-Models:         phobert_model_20260305.pt, hybrid_model_20260305.pkl
-Summaries:      model_summary_20260305.csv
-Visualizations: confusion_matrix_20260305.png, training_history_20260305.png
-Artifacts:      tfidf_vectorizer_20260305.pkl, scaler_20260305.pkl
-```
+- PhoBERT: `vinai/phobert-base`, lr=2e-5, warmup=10%, early stopping patience=5
+- TF-IDF: 5000 features, 1-2 grams
+- LogisticRegression: C=1.0, max_iter=1000
 
-### Result Directories
-Organize results by model type with baseline/improvements structure:
+## Vietnamese Text Preprocessing
 
-**Format**: `results/{ModelType}/{baseline|improvements}/{YYYYMMDD}/`
+The preprocessing pipeline includes:
 
-**Example**:
-```
-results/
-├── PhoBERT/
-│   ├── baseline/                   # Original baseline (no timestamp - keep as reference)
-│   └── improvements/
-│       ├── 20260305/              # Improved version with timestamp
-│       └── 20260310/              # Another improvement
-├── PhoBERT_TF-IDF/
-│   ├── baseline/
-│   └── improvements/
-│       └── 20260305/
-├── PhoBERT_Sentiwordnet/
-│   ├── baseline/
-│   └── improvements/
-└── PhoBERT_TF-IDF_Sentiwordnet/
-    ├── baseline/
-    └── improvements/
+### 1. Text Cleaning
+```python
+def preprocess_vietnamese(text, normalize_slang=True):
+    text = text.lower()
+    if normalize_slang:
+        text = normalize_teencode(text)  # Convert teencode to standard Vietnamese
+    text = re.sub(r'[^\w\sàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]', ' ', text)
+    return ' '.join(text.split())
 ```
 
-**Key Rules**:
-- **baseline/**: First/baseline version of each model type - NO timestamp
-- **improvements/YYYYMMDD/**: All improved versions go here with timestamp
-- Each experiment (baseline or improvement) follows the same subdirectory structure
+### 2. Teencode Normalization
+Common Vietnamese internet slang conversions:
+| Teencode | Standard |
+|----------|----------|
+| ko, k, hok, kg | không |
+| j, gj | gì |
+| cx | cũng |
+| dc, đc | được |
+| bt, bik | biết |
+| lm, lém | lắm |
+| qa, qá | quá |
+| e | em |
+| thầy, thay | thầy |
 
-### Result Files Naming Convention
-**Inside each experiment directory (baseline or improvements), use organized subdirectories**:
+See `TEENCODE_DICT` in `src/data_utils.py` for full list (100+ mappings).
+
+## Results Directory Structure
 
 ```
-results/PhoBERT_TF-IDF/improvements/20260305/
-├── models/
-│   ├── xgboost_smote_model.pkl     # Main model file
-│   ├── lr_smote_model.pkl          # Secondary model
-│   └── late_fusion_model.pkl       # Ensemble model
-├── summaries/
-│   ├── model_comparison.csv        # Comparison table
-│   ├── summary.csv                 # Overall summary
-│   ├── experiment_log.json         # Hyperparameters & config
-│   └── training_results.txt        # Training metrics & logs (REQUIRED)
-├── visualizations/
-│   ├── confusion_matrix.png        # Standard charts
-│   ├── training_history.png
-│   ├── per_class_metrics.png
-│   └── model_comparison_bar.png
-└── artifacts/
-    ├── tfidf_vectorizer.pkl        # Preprocessing artifacts
-    ├── feature_scaler.pkl
-    └── tokenizer.pkl
+results/{ModelType}/{baseline|improvements}/{YYYYMMDD}/
+├── models/           # phobert_model.pt, xgboost_model.pkl
+├── summaries/        # summary.csv, training_results.txt (REQUIRED)
+├── visualizations/   # confusion_matrix.png, training_history.png
+└── artifacts/        # tfidf_vectorizer.pkl, scaler.pkl
 ```
 
-**File naming rules**:
-- **Models**: `{algorithm}_model.pkl` (e.g., `xgboost_model.pkl`, `phobert_model.pt`)
-- **Summaries**: `{description}.csv` (e.g., `model_comparison.csv`, `summary.csv`)
-- **Training Logs**: `training_results.txt` (REQUIRED - see Training Logs section below)
-- **Visualizations**: `{chart_type}.png` (e.g., `confusion_matrix.png`, `roc_curve.png`)
-- **Artifacts**: `{component}.pkl` (e.g., `tfidf_vectorizer.pkl`, `scaler.pkl`)
+**Rules**:
+- `baseline/` has NO timestamp (reference version)
+- `improvements/YYYYMMDD/` has timestamp for each experiment iteration
+- Every experiment MUST include `summaries/training_results.txt`
 
-**Special cases**:
-- Multiple models: Add suffix like `_best`, `_v1`, `_v2`
-- Multiple charts: Add qualifier like `_train`, `_val`, `_test`
-- Multiple experiments: Add descriptive suffix like `_smote`, `_focal_loss`
-
-### Why This Structure?
-- **Timestamp in directory**: Tracks when experiment ran
-- **Subdirectories**: Organized by file type
-- **Descriptive names**: Self-documenting, no ambiguity
-- **Easy comparison**: Side-by-side directories for different runs
-
-## Training Logs (REQUIRED)
-
-**Every training experiment MUST save results to `training_results.txt`** in the `summaries/` directory.
-
-### Content Format
+## Training Results Format (REQUIRED)
 
 ```
 ========================================
 TRAINING RESULTS - {Model Name}
 ========================================
 Date: {YYYY-MM-DD HH:MM:SS}
-Model Type: {PhoBERT / PhoBERT_TF-IDF / PhoBERT_Sentiwordnet / ...}
+Model Type: {PhoBERT / PhoBERT_TF-IDF / PhoBERT_Sentiwordnet}
 Experiment: {baseline / improvements/}
 
 ----------------------------------------
@@ -185,87 +433,34 @@ HYPERPARAMETERS
 ----------------------------------------
 Learning Rate: {value}
 Batch Size: {value}
-Epochs: {value}
-Optimizer: {AdamW / Adam / ...}
-Loss Function: {CrossEntropy / ...}
-{other relevant hyperparameters...}
-
-----------------------------------------
-TRAINING RESULTS
-----------------------------------------
-Train Loss: {value}
-Train Accuracy: {value}
-Train F1 (macro): {value}
-
-Validation Loss: {value}
-Validation Accuracy: {value}
-Validation F1 (macro): {value}
+...
 
 ----------------------------------------
 TEST RESULTS
 ----------------------------------------
 Test Accuracy: {value}
 Test F1 (macro): {value}
-Test Precision (macro): {value}
-Test Recall (macro): {value}
 
 Per-Class Metrics:
-  Negative: Precision={value}, Recall={value}, F1={value}
-  Neutral:  Precision={value}, Recall={value}, F1={value}
-  Positive: Precision={value}, Recall={value}, F1={value}
+  Negative: P={value}, R={value}, F1={value}
+  Neutral:  P={value}, R={value}, F1={value}
+  Positive: P={value}, R={value}, F1={value}
 
 ----------------------------------------
 CONFUSION MATRIX
 ----------------------------------------
-[[tn, fn, fp],
- [fn, tn, fp],
- [fp, fn, tp]]
-
-----------------------------------------
-TRAINING TIME
-----------------------------------------
-Total Time: {X minutes Y seconds}
-Epochs Completed: {N}
-Best Epoch: {N}
-```
-
-### Why Training Logs Are Required
-- **Reproducibility**: Track exact hyperparameters used
-- **Comparison**: Easy to compare different experiments
-- **Debugging**: Identify issues by reviewing training history
-- **Documentation**: Permanent record without needing to re-run
-
-## Vietnamese Text Preprocessing
-
-```python
-def preprocess_vietnamese(text):
-    text = text.lower()
-    text = re.sub(r'[^\w\sàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]', ' ', text)
-    return ' '.join(text.split())
+[[...]]
 ```
 
 ## Common Issues
 
-**Class Imbalance**: Neutral class is only 4% of training data. Solutions:
-- SMOTE oversampling (Neutral: 458 → 3000)
-- Class-weighted loss
-- Focal Loss (see [plan/Baseline_Fine-tune.md](plan/Baseline_Fine-tune.md))
+- **Class Imbalance**: Neutral is 4% of training data. Solutions: SMOTE, class-weighted loss, focal loss.
+- **Memory**: PhoBERT embedding extraction is slow. Cache extracted embeddings.
+- **Model Loading**: Use `load_model_safe()` helper to handle state_dict with/without "module." prefix from DataParallel.
 
-**Memory**: PhoBERT extraction is slow. Extract embeddings once and cache them.
+## Best Results
 
-**Model Loading**: Use `load_model_safe()` helper to handle state_dict with/without "module." prefix from DataParallel.
-
-## Results Tracking
-
-Current best model (TF-IDF Hybrid + XGBoost + SMOTE):
-- Test Accuracy: 0.933
-- Test F1: 0.932
-- Best for: Neutral class improvement (main challenge)
-
-## Visualization
-
-[notebook/Model_Visualization.ipynb](notebook/Model_Visualization.ipynb) generates:
-- Per-class Precision/Recall/F1 comparisons
-- Confusion matrices (normalized and count)
-- Confidence distributions
-- Model comparison charts
+| Model | Test Acc | Test F1 | Notes |
+|-------|----------|---------|-------|
+| PhoBERT Baseline | 0.934 | 0.931 | CrossEntropyLoss |
+| TF-IDF Hybrid + XGBoost + SMOTE | 0.933 | 0.932 | Best for Neutral class |
