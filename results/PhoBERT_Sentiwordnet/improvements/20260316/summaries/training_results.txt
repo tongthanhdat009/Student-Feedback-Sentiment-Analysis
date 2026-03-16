@@ -1,0 +1,54 @@
+==================================================
+TRAINING RESULTS - PhoBERT + SentiWordNet (Fine-tuned)
+==================================================
+Date: 2026-03-16 07:25:03
+Model Type: PhoBERT_Sentiwordnet
+Experiment: improvements/20260316 (End-to-End)
+
+--------------------------------------------------
+MODEL ARCHITECTURE
+--------------------------------------------------
+PhoBERT: vinai/phobert-base (UNFROZEN - trainable)
+SentiWordNet Features: 35 (extended)
+Feature Projection: 35 -> 64
+Combined: 768 + 64 = 832
+Classifier: 832 -> 256 -> 3
+
+--------------------------------------------------
+HYPERPARAMETERS
+--------------------------------------------------
+Learning Rate: 2e-05
+Batch Size: 32
+Max Length: 256
+Epochs: 5
+Warmup Ratio: 0.1
+Weight Decay: 0.01
+Dropout: 0.3
+Early Stop Patience: 2
+Class Weights: [1.0, 5.0, 1.0]
+Gradient Clip: 1.0
+
+--------------------------------------------------
+TRAINING HISTORY
+--------------------------------------------------
+Total Epochs Trained: 5
+Best Epoch: 5
+Best Val F1: 0.8483
+
+--------------------------------------------------
+TEST RESULTS
+--------------------------------------------------
+Test Accuracy: 0.9274
+Test F1 (macro): 0.8136
+
+Per-Class Metrics:
+  Negative: P=0.9406, R=0.9560, F1=0.9483
+  Neutral:  P=0.5903, R=0.5090, F1=0.5466
+  Positive: P=0.9459, R=0.9459, F1=0.9459
+
+--------------------------------------------------
+CONFUSION MATRIX (Test)
+--------------------------------------------------
+[1347   27   35]
+[  31   85   51]
+[  54   32 1504]

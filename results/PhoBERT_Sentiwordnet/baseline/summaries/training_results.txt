@@ -1,0 +1,52 @@
+==================================================
+TRAINING RESULTS - PhoBERT + SentiWordNet Baseline
+==================================================
+Date: 2026-03-16 00:41:12
+Model Type: PhoBERT_Sentiwordnet
+Experiment: baseline
+
+--------------------------------------------------
+MODEL SELECTION
+--------------------------------------------------
+Selected Features: hybrid_alpha_0.5
+Selected Alpha: 0.5
+Selected C: 0.1
+Selected Class Weight: None
+Late Fusion Weight (PhoBERT): None
+PhoBERT-only Val F1: 0.8576
+Best Hybrid Val F1: 0.8598
+
+--------------------------------------------------
+FEATURES
+--------------------------------------------------
+PhoBERT Model: Fine-tuned baseline from /content/drive/MyDrive/Student-Feedback-Sentiment-Analysis/results/PhoBERT/baseline/models/phobert_model.pt
+PhoBERT Frozen: Yes
+PhoBERT Embeddings: 768
+SentiWordNet Features: 8
+SentiWordNet Words: 1227
+
+--------------------------------------------------
+TEST RESULTS
+--------------------------------------------------
+Test Accuracy: 0.9283
+Test F1 (macro): 0.8194
+Test Precision (macro): 0.8313
+Test Recall (macro): 0.8095
+
+Per-Class Metrics:
+  Negative: Precision=0.9398, Recall=0.9524, F1=0.9461
+  Neutral: Precision=0.6069, Recall=0.5269, F1=0.5641
+  Positive: Precision=0.9473, Recall=0.9491, F1=0.9482
+
+--------------------------------------------------
+CONFUSION MATRIX (Test)
+--------------------------------------------------
+[1342   28   39]
+[  34   88   45]
+[  52   29 1509]
+
+--------------------------------------------------
+TRAINING TIME
+--------------------------------------------------
+Total Time: 5.9 seconds (0.1 minutes)
+Training Samples: 11426

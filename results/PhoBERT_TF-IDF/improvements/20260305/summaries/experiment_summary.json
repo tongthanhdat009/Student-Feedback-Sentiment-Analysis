@@ -1,7 +1,7 @@
 {
   "Best Model": "XGBoost",
-  "Accuracy": 0.934301958307012,
-  "F1 (weighted)": 0.9335054468443277,
+  "Accuracy": 0.9298799747315224,
+  "F1 (weighted)": 0.9291918978689258,
   "Improvements": [
     "SMOTE for class imbalance (Neutral: 458→3000)",
     "Reduced TF-IDF features (5000→3000)",

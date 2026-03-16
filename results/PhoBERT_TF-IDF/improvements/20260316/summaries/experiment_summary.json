@@ -1,0 +1,17 @@
+{
+  "Best Model": "XGBoost",
+  "Accuracy": 0.9311433986102338,
+  "F1 (weighted)": 0.9303599763816159,
+  "Configuration": {
+    "TFIDF_Max_Features": 5000,
+    "TFIDF_Ngram_Range": "(1, 2)",
+    "SMOTE_Strategy": "{0: 5325, 1: 3000, 2: 5643}"
+  },
+  "Improvements": [
+    "TF-IDF 5000 features (increased from 3000)",
+    "Bigrams (1,2) - proven better than trigrams",
+    "SMOTE for class imbalance (Neutral: 458->3000)",
+    "XGBoost classifier",
+    "Regularization C=0.1"
+  ]
+}

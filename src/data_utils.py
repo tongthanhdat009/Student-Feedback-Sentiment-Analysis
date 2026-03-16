@@ -16,7 +16,14 @@ Main functions:
     - normalize_teencode(): Normalize Vietnamese internet slang
     - preprocess_vietnamese(): Full preprocessing pipeline
     - get_swn_features(): Extract 8 SentiWordNet features
-    - extract_swn_features_batch(): Batch feature extraction
+    - get_swn_features_extended(): Extract 35 extended SentiWordNet features
+    - extract_swn_features_batch(): Batch feature extraction (8 features)
+    - extract_swn_features_extended_batch(): Batch feature extraction (35 features)
+
+Feature constants:
+    - SWN_FEATURE_NAMES: List of 8 basic feature names
+    - SWN_EXTENDED_FEATURE_NAMES: List of 35 extended feature names
+    - NEGATION_WORDS: Set of Vietnamese negation words
 """
 
 import os
@@ -362,11 +369,208 @@ def extract_swn_features_batch(
     return np.array(features)
 
 
-# Feature names for reference
+# Feature names for reference (original 8 features)
 SWN_FEATURE_NAMES = [
     'pos_sum', 'neg_sum', 'pos_max', 'neg_max',
     'pos_mean', 'neg_mean', 'coverage', 'polarity'
 ]
+
+# Extended feature names (35 features total)
+SWN_EXTENDED_FEATURE_NAMES = [
+    # Original 8 features
+    'pos_sum', 'neg_sum', 'pos_max', 'neg_max',
+    'pos_mean', 'neg_mean', 'coverage', 'polarity',
+    # Statistical features (6)
+    'pos_std', 'neg_std', 'pos_min', 'neg_min',
+    'pos_median', 'neg_median',
+    # Count features (4)
+    'pos_high_count', 'neg_high_count',
+    'pos_word_count', 'neg_word_count',
+    # Ratio features (4)
+    'pos_neg_ratio', 'pos_neg_word_ratio',
+    'pos_coverage', 'neg_coverage',
+    # Polarity features (3)
+    'polarity_abs', 'sentiment_strength', 'net_sentiment',
+    # Position features (6)
+    'first_word_pos', 'first_word_neg',
+    'last_word_pos', 'last_word_neg',
+    'pos_shift', 'neg_shift',
+    # Negation features (4)
+    'negation_count', 'negation_ratio',
+    'negated_pos_sum', 'negated_neg_sum',
+]
+
+
+# ============================================
+# NEGATION WORDS
+# ============================================
+NEGATION_WORDS = {
+    'không', 'ko', 'chẳng', 'chả', 'đừng', 'không_phải',
+    'hok', 'chưa', 'không_bao_giờ', 'không_bao_gio'
+}
+
+
+def get_swn_features_extended(
+    text: str,
+    word_to_scores: Dict[str, Dict[str, float]]
+) -> List[float]:
+    """
+    Extract 35 extended SentiWordNet features from text.
+
+    Features include:
+        - Original 8 features (sum, max, mean, coverage, polarity)
+        - Statistical features (std, min, median)
+        - Count features (high sentiment words, word counts)
+        - Ratio features (pos/neg ratios)
+        - Position features (first/last word, shift)
+        - Negation features (negation impact)
+
+    Args:
+        text: Input Vietnamese text
+        word_to_scores: SentiWordNet lexicon dict from load_sentiwordnet()
+
+    Returns:
+        List of 35 feature values
+    """
+    words = preprocess_vietnamese(text).split()
+    n = len(words) or 1
+
+    pos_scores = []
+    neg_scores = []
+    pos_words = []
+    neg_words = []
+
+    for word in words:
+        if word in word_to_scores:
+            pos = word_to_scores[word]['pos_score']
+            neg = word_to_scores[word]['neg_score']
+            pos_scores.append(pos)
+            neg_scores.append(neg)
+            if pos > 0:
+                pos_words.append(word)
+            if neg > 0:
+                neg_words.append(word)
+
+    covered = len(pos_scores)
+    pos_sum = sum(pos_scores) if pos_scores else 0.0
+    neg_sum = sum(neg_scores) if neg_scores else 0.0
+
+    # Helper for empty lists
+    def safe_mean(lst):
+        return sum(lst) / len(lst) if lst else 0.0
+
+    def safe_std(lst):
+        if len(lst) < 2:
+            return 0.0
+        m = safe_mean(lst)
+        return (sum((x - m) ** 2 for x in lst) / len(lst)) ** 0.5
+
+    # Original 8 features
+    features_8 = [
+        pos_sum,                                # pos_sum
+        neg_sum,                                # neg_sum
+        max(pos_scores) if pos_scores else 0.0, # pos_max
+        max(neg_scores) if neg_scores else 0.0, # neg_max
+        safe_mean(pos_scores),                  # pos_mean
+        safe_mean(neg_scores),                  # neg_mean
+        covered / n,                            # coverage
+        pos_sum - neg_sum,                      # polarity
+    ]
+
+    # Statistical features (6)
+    features_stat = [
+        safe_std(pos_scores),                   # pos_std
+        safe_std(neg_scores),                   # neg_std
+        min(pos_scores) if pos_scores else 0.0, # pos_min
+        min(neg_scores) if neg_scores else 0.0, # neg_min
+        sorted(pos_scores)[len(pos_scores)//2] if pos_scores else 0.0,  # pos_median
+        sorted(neg_scores)[len(neg_scores)//2] if neg_scores else 0.0,  # neg_median
+    ]
+
+    # Count features (4)
+    features_count = [
+        sum(1 for s in pos_scores if s > 0.5),  # pos_high_count
+        sum(1 for s in neg_scores if s > 0.5),  # neg_high_count
+        len(pos_words),                         # pos_word_count
+        len(neg_words),                         # neg_word_count
+    ]
+
+    # Ratio features (4)
+    features_ratio = [
+        pos_sum / (neg_sum + 1e-6),             # pos_neg_ratio
+        len(pos_words) / (len(neg_words) + 1e-6),  # pos_neg_word_ratio
+        len(pos_words) / n,                     # pos_coverage
+        len(neg_words) / n,                     # neg_coverage
+    ]
+
+    # Polarity features (3)
+    features_polarity = [
+        abs(pos_sum - neg_sum),                 # polarity_abs
+        pos_sum + neg_sum,                      # sentiment_strength
+        pos_sum - neg_sum,                      # net_sentiment (same as polarity, but included for clarity)
+    ]
+
+    # Position features (6)
+    first_pos = word_to_scores.get(words[0], {}).get('pos_score', 0.0) if words else 0.0
+    first_neg = word_to_scores.get(words[0], {}).get('neg_score', 0.0) if words else 0.0
+    last_pos = word_to_scores.get(words[-1], {}).get('pos_score', 0.0) if words else 0.0
+    last_neg = word_to_scores.get(words[-1], {}).get('neg_score', 0.0) if words else 0.0
+
+    mid = n // 2
+    first_half_pos = sum(word_to_scores[w]['pos_score'] for w in words[:mid] if w in word_to_scores)
+    first_half_neg = sum(word_to_scores[w]['neg_score'] for w in words[:mid] if w in word_to_scores)
+    second_half_pos = sum(word_to_scores[w]['pos_score'] for w in words[mid:] if w in word_to_scores)
+    second_half_neg = sum(word_to_scores[w]['neg_score'] for w in words[mid:] if w in word_to_scores)
+
+    features_position = [
+        first_pos,                              # first_word_pos
+        first_neg,                              # first_word_neg
+        last_pos,                               # last_word_pos
+        last_neg,                               # last_word_neg
+        first_half_pos - second_half_pos,       # pos_shift
+        first_half_neg - second_half_neg,       # neg_shift
+    ]
+
+    # Negation features (4)
+    negation_count = sum(1 for w in words if w in NEGATION_WORDS)
+    negated_pos = []
+    negated_neg = []
+
+    for i, word in enumerate(words):
+        if word in NEGATION_WORDS and i + 1 < len(words):
+            next_word = words[i + 1]
+            if next_word in word_to_scores:
+                negated_pos.append(word_to_scores[next_word]['pos_score'])
+                negated_neg.append(word_to_scores[next_word]['neg_score'])
+
+    features_negation = [
+        negation_count,                         # negation_count
+        negation_count / n,                     # negation_ratio
+        sum(negated_pos) if negated_pos else 0.0,  # negated_pos_sum
+        sum(negated_neg) if negated_neg else 0.0,  # negated_neg_sum
+    ]
+
+    # Combine all features
+    return (features_8 + features_stat + features_count +
+            features_ratio + features_polarity + features_position + features_negation)
+
+
+def extract_swn_features_extended_batch(
+    texts: List[str],
+    word_to_scores: Dict[str, Dict[str, float]]
+) -> np.ndarray:
+    """
+    Extract extended SentiWordNet features (35 features) for a batch of texts.
+
+    Args:
+        texts: List of Vietnamese texts
+        word_to_scores: SentiWordNet lexicon dict
+
+    Returns:
+        numpy array of shape (len(texts), 35)
+    """
+    features = [get_swn_features_extended(text, word_to_scores) for text in texts]
+    return np.array(features)
 
 # ============================================
 # RAW DATA PROCESSING
@@ -632,6 +836,19 @@ if __name__ == '__main__':
     print("7. Testing get_swn_features():")
     features = get_swn_features(sample, word_to_scores)
     print(f"   Features: {dict(zip(SWN_FEATURE_NAMES, features))}")
+    print()
+
+    # Test get_swn_features_extended
+    print("8. Testing get_swn_features_extended():")
+    ext_features = get_swn_features_extended(sample, word_to_scores)
+    print(f"   Extended features count: {len(ext_features)}")
+    print(f"   First 8 features: {dict(zip(SWN_EXTENDED_FEATURE_NAMES[:8], ext_features[:8]))}")
+    print()
+
+    # Test extract_swn_features_extended_batch
+    print("9. Testing extract_swn_features_extended_batch():")
+    batch_features = extract_swn_features_extended_batch(teencode_samples, word_to_scores)
+    print(f"   Batch shape: {batch_features.shape}")
     print()
 
     print("All tests passed!")

@@ -1,7 +1,7 @@
 ========================================
 TRAINING RESULTS - PhoBERT + TF-IDF Hybrid (Improved)
 ========================================
-Date: 2026-03-05 15:01:03
+Date: 2026-03-16 00:31:35
 Model Type: PhoBERT_TF-IDF
 Experiment: improvements/20260305
 
@@ -20,15 +20,15 @@ XGBoost: n_estimators=200, max_depth=6, learning_rate=0.1
 ----------------------------------------
 TEST RESULTS (BEST MODEL: XGBoost)
 ----------------------------------------
-Test Accuracy: 0.9343
-Test F1 (weighted): 0.9335
+Test Accuracy: 0.9299
+Test F1 (weighted): 0.9292
 
 Per-Class Metrics (Best Model):
-  Negative: P=0.9459, R=0.9553, F1=0.9506
-  Neutral:  P=0.6447, R=0.5868, F1=0.6144
-  Positive: P=0.9516, R=0.9522, F1=0.9519
+  Negative: P=0.9424, R=0.9524, F1=0.9474
+  Neutral:  P=0.6065, R=0.5629, F1=0.5839
+  Positive: P=0.9502, R=0.9484, F1=0.9493
 
 All Models Summary:
-  Logistic Regression: Acc=0.9321, F1=0.9310
-  XGBoost: Acc=0.9343, F1=0.9335
-  Late Fusion: Acc=0.9305, F1=0.9289
+  Logistic Regression: Acc=0.9261, F1=0.9255
+  XGBoost: Acc=0.9299, F1=0.9292
+  Late Fusion: Acc=0.9280, F1=0.9271
