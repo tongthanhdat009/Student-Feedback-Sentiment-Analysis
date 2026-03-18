@@ -1,0 +1,12 @@
+============================================================
+TRAINING RESULTS - PhoBERT + TF-IDF + SentiWordNet End-to-End
+============================================================
+Date: 2026-03-18 15:08:05
+Results Dir: /content/drive/MyDrive/Student-Feedback-Sentiment-Analysis/results/PhoBERT_TF-IDF_Sentiwordnet/end_to_end_unfreezing/20260318_142712
+Best Epoch: 6
+Best Stage: full
+Best Val Macro F1: 0.8352
+Test Accuracy: 0.9311
+Test F1 Macro: 0.8236
+Test F1 Weighted: 0.9294
+Test F1 Neutral: 0.5724

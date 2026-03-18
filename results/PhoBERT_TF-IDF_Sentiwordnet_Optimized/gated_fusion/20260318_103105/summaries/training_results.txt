@@ -1,0 +1,12 @@
+============================================================
+TRAINING RESULTS - PhoBERT + TF-IDF + SentiWordNet (GATED FUSION)
+============================================================
+Date: 2026-03-18 11:32:57
+Results Dir: /content/drive/MyDrive/Student-Feedback-Sentiment-Analysis/results/PhoBERT_TF-IDF_Sentiwordnet_Optimized/gated_fusion/20260318_103105
+Best Epoch: 8
+Best Stage: full
+Best Val Macro F1: 0.8225
+Test Accuracy: 0.9188
+Test F1 Macro: 0.7872
+Test F1 Weighted: 0.9138
+Test F1 Neutral: 0.4867
