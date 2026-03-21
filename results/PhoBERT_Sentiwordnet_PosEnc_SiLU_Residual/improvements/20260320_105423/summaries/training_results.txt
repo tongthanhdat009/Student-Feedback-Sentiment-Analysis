@@ -1,0 +1,12 @@
+============================================================
+TRAINING RESULTS - PhoBERT + SentiWordNet (OPTIMIZED + Positional Encoding + SiLU)
+============================================================
+Date: 2026-03-20 11:55:49
+Results Dir: /content/drive/MyDrive/Student-Feedback-Sentiment-Analysis/results/PhoBERT_Sentiwordnet_PosEnc_SiLU_Residual/improvements/20260320_105423
+Best Epoch: 5
+Best Stage: full
+Best Val Macro F1: 0.8549
+Test Accuracy: 0.9236
+Test F1 Macro: 0.8234
+Test F1 Weighted: 0.9234
+Test F1 Neutral: 0.5861

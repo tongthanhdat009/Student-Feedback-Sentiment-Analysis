@@ -1,0 +1,16 @@
+============================================================
+TRAINING RESULTS - PhoBERT + TF-IDF End-to-End (Positional Encoding + SiLU, No Oversampling)
+============================================================
+Date: 2026-03-20 01:07:02
+Results Dir: /content/drive/MyDrive/Student-Feedback-Sentiment-Analysis/results/PhoBERT_TFIDF_E2E_PosEnc_SiLU_Residual/improvements/20260319_234942
+Best Epoch: 8
+Best Stage: full
+TF-IDF Sparse Dim: 5000
+TF-IDF LSA Dim: 512
+LSA Explained Variance Ratio Sum: 0.6393
+Class Imbalance Handling: Class-weighted loss only (NO oversampling)
+Best Val Macro F1: 0.8541
+Test Accuracy: 0.9311
+Test F1 Macro: 0.8335
+Test F1 Weighted: 0.9299
+Test F1 Neutral: 0.6045
