@@ -1,0 +1,31 @@
+============================================================
+TRAINING RESULTS - PhoBERT + TF-IDF Refactored Light Fusion Optimized
+============================================================
+Seed: 42
+Best Epoch: 7
+Best Stage: full
+Selection Metric: f1_macro
+Best Selection Score: 0.8537
+Fusion Mode: gated
+Class Weight Mode: balanced
+Neutral Bias: +0.65
+
+Validation (Raw)
+  F1 Macro: 0.8537
+  F1 Neutral: 0.6466
+
+Validation (Bias Tuned)
+  F1 Macro: 0.8609
+  F1 Neutral: 0.6667
+
+Test (Raw)
+  Accuracy: 0.9267
+  F1 Macro: 0.8116
+  F1 Weighted: 0.9247
+  F1 Neutral: 0.5430
+
+Test (Bias Tuned)
+  Accuracy: 0.9261
+  F1 Macro: 0.8159
+  F1 Weighted: 0.9250
+  F1 Neutral: 0.5570

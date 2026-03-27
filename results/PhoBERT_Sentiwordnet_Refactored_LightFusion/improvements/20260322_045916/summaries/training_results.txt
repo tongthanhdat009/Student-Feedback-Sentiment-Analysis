@@ -1,0 +1,47 @@
+======================================================================
+EXPERIMENT 6: GATED + FOCAL LOSS + LOG1P_BALANCED
+======================================================================
+Date: 2026-03-22 06:20:46
+Results Dir: /content/drive/MyDrive/Student-Feedback-Sentiment-Analysis/results/PhoBERT_Sentiwordnet_Refactored_LightFusion/improvements/20260322_045916
+
+----------------------------------------------------------------------
+EXPERIMENT SETTINGS
+----------------------------------------------------------------------
+Fusion Mode: gated
+Class Weight Mode: log1p_balanced
+Use Focal Loss: True
+Focal Gamma: 2.0
+Label Smoothing: 0.1
+SWN Projection Dim: 128
+Selection Metric: f1_macro
+
+----------------------------------------------------------------------
+TRAINING RESULTS
+----------------------------------------------------------------------
+Best Epoch: 7
+Best Stage: full
+Best Selection Score: 0.8536
+Best Val Macro F1: 0.8536
+
+----------------------------------------------------------------------
+TEST RESULTS
+----------------------------------------------------------------------
+Test Accuracy: 0.9318
+Test Precision Macro: 0.8493
+Test Recall Macro: 0.8123
+Test F1 Macro: 0.8282
+Test F1 Weighted: 0.9298
+
+Per-Class F1 Scores:
+  Negative: 0.9481
+  Neutral: 0.5867
+  Positive: 0.9497
+
+----------------------------------------------------------------------
+CONFUSION MATRIX (TEST)
+----------------------------------------------------------------------
+              Predicted
+              Neg   Neu   Pos
+Actual Neg   1361    21    27
+       Neu     36    88    43
+       Pos     65    24  1501

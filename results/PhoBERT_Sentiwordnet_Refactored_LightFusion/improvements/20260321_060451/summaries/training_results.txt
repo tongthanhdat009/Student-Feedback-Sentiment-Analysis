@@ -1,0 +1,14 @@
+============================================================
+TRAINING RESULTS - PhoBERT + SentiWordNet Refactored Light Fusion
+============================================================
+Best Epoch: 7
+Best Stage: full
+Selection Metric: f1_macro
+Best Selection Score: 0.8478
+Fusion Mode: concat
+Class Weight Mode: sqrt_balanced
+Test Accuracy: 0.9302
+Test Precision Macro: 0.8279
+Test Recall Macro: 0.8325
+Test F1 Macro: 0.8301
+Test F1 Weighted: 0.9304
