@@ -1,0 +1,2 @@
+Model,Loss Function,Data Augmentation,Class Weights,Epochs Trained,Best Val F1,Test Accuracy,Test Precision (weighted),Test Recall (weighted),Test F1 (weighted),Test Loss
+PhoBERT Baseline,CrossEntropyLoss,No,No,7,0.9444968581726424,0.9320909665192673,0.9284720006288439,0.9320909665192673,0.9290737994882707,0.32907204468725154
