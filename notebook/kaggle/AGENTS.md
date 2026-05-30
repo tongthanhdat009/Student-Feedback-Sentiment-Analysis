@@ -4,17 +4,16 @@
 # kaggle
 
 ## Purpose
-Kaggle-optimized notebook variants for training on cloud GPU (Kaggle T4/P100).
+Kaggle-optimized notebook variants for training on cloud GPU (Kaggle T4/P100). Each subdirectory contains notebook.ipynb + kernel-metadata.json for Kaggle API push.
 
-## Key Files
-| File | Description |
-|------|-------------|
-| `PhoBERT_Baseline_Kaggle.ipynb` | Kaggle version of PhoBERT baseline (T4 GPU) |
-| `PhoBERT_Baseline_Positional_Fair_Kaggle.ipynb` | Baseline with positional encoding + fair evaluation on Kaggle |
+## Subdirectories
+| Directory | Purpose |
+|-----------|---------|
+| `phobert-baseline/` | Kaggle notebook for PhoBERT baseline on T4 GPU |
 
 ## For AI Agents
-
 - Uses paths like `/kaggle/input/uit-vsfc` instead of local paths
-- Does NOT require local Python env setup
+- Consumed by backend `NotebookInventory` service for Kaggle push workflow
+- Outdated variants moved to `notebook/out date/kaggle/`
 
 <!-- MANUAL: -->

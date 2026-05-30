@@ -70,3 +70,7 @@ data/raw/uit_vsfc/*.csv
 /.claude
 /desktop.ini
 /.omc
+/frontend/node_modules
+/.playwright-mcp
+/.vite
+backend/.env

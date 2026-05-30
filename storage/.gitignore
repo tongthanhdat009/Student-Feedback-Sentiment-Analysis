@@ -1,0 +1,2 @@
+kaggle_outputs/*
+!kaggle_outputs/.gitkeep

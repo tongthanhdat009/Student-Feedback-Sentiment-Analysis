@@ -22,6 +22,9 @@ Vietnamese Student Feedback Sentiment Analysis using UIT-VSFC dataset. Implement
 | `docs/` | Analysis reports and optimization docs (see `docs/AGENTS.md`) |
 | `results/` | Experiment outputs per model variant (see `results/AGENTS.md`) |
 | `plan/` | Planning artifacts (see `plan/AGENTS.md`) |
+| `backend/` | FastAPI backend — Kaggle Notebook Manager (see `backend/AGENTS.md`) |
+| `frontend/` | React + Vite SPA for Kaggle dashboard (see `frontend/AGENTS.md`) |
+| `storage/` | Local Kaggle output artifacts storage (see `storage/AGENTS.md`) |
 
 ## For AI Agents
 
