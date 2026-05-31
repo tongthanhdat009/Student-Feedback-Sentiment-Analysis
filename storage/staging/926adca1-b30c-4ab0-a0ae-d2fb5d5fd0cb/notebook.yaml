@@ -1,0 +1,24 @@
+slug: phobert-baseline
+title: PhoBERT Baseline
+description: Baseline sentiment classification notebook
+entry_file: notebook.ipynb
+default_accelerator: NvidiaTeslaT4
+default_timeout_seconds: 3600
+tags:
+  - nlp
+  - sentiment
+  - phobert
+params:
+  epochs:
+    type: int
+    default: 5
+  batch_size:
+    type: int
+    default: 16
+  learning_rate:
+    type: float
+    default: 0.00002
+artifacts:
+  - "*.csv"
+  - "*.json"
+  - "*.pt"

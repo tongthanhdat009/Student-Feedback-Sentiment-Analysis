@@ -1,12 +1,16 @@
-import type { Notebook } from "../../types/kaggle";
+import type { Account, Notebook } from "../../types/kaggle";
 import { kaggleApi } from "../../api/kaggleApi";
+
 export function NotebookTriggerModal({
   notebooks,
+  accounts = [],
   onTriggered,
 }: {
   notebooks: Notebook[];
+  accounts?: Account[];
   onTriggered: () => void;
 }) {
+  const account = accounts[0]?.name;
   return (
     <div className="card">
       <h3>Notebooks</h3>
@@ -15,9 +19,10 @@ export function NotebookTriggerModal({
           {n.notebook_id}{" "}
           <button
             className="btn"
+            disabled={!n.valid || !account}
             onClick={() =>
-              kaggleApi
-                .trigger({ account: "main", notebook_id: n.notebook_id })
+              account && kaggleApi
+                .trigger({ account, notebook_id: n.notebook_id })
                 .then(onTriggered)
             }
           >

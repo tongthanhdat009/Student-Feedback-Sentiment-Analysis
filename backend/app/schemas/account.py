@@ -14,3 +14,9 @@ class AccountRead(BaseModel):
     updated_at: datetime
     last_used_at: datetime | None = None
     model_config = {'from_attributes': True}
+
+class AccountUpdate(BaseModel):
+    name: str | None = Field(None, max_length=100)
+    kaggle_username: str | None = None
+    kaggle_key: str | None = None
+    is_active: bool | None = None

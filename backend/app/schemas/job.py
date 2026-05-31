@@ -2,7 +2,8 @@ from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel
 class NotebookTriggerRequest(BaseModel):
-    account: str
+    account: str | None = None
+    accounts: list[str] | None = None
     notebook_id: str
 class JobRead(BaseModel):
     id: UUID
@@ -12,6 +13,10 @@ class JobRead(BaseModel):
     status: str
     message: str | None = None
     output_path: str | None = None
+    kaggle_ref: str | None = None
+    staging_path: str | None = None
+    last_polled_at: datetime | None = None
+    timeout_seconds: int | None = None
     s3_object_key: str | None = None
     s3_presigned_url: str | None = None
     s3_presigned_url_expires_at: datetime | None = None

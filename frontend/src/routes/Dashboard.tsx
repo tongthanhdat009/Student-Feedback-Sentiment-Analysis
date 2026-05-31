@@ -1,36 +1,34 @@
 import { useEffect, useState } from "react";
-import { Play, Download, CheckCircle2, XCircle, Clock, ExternalLink } from "lucide-react";
+import { Play, Download, ExternalLink } from "lucide-react";
 import { kaggleApi } from "../api/kaggleApi";
 import type { Job } from "../types/kaggle";
+import { Pager } from "../components/kaggle/Pager";
+import { StatusBadge } from "../components/kaggle/StatusBadge";
 
-function jobStatusBadge(status: string) {
-  const cls =
-    status === "completed" ? "badge badge-success" :
-    status === "failed" ? "badge badge-danger" :
-    status === "running" ? "badge badge-running" :
-    "badge badge-muted";
-  const icon =
-    status === "completed" ? <CheckCircle2 size={11} /> :
-    status === "failed" ? <XCircle size={11} /> :
-    status === "running" ? <Clock size={11} /> :
-    null;
-  return <span className={cls}>{icon}<span className="ml-1">{status}</span></span>;
-}
+const activeStatuses = new Set(["pending", "staging", "pushed", "running"]);
 
 export function Dashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(true);
 
-  const load = () => {
+  const load = (nextPage = page) => {
     setLoading(true);
-    kaggleApi.jobs().then(setJobs).catch(console.error).finally(() => setLoading(false));
+    kaggleApi.jobs(nextPage, pageSize).then((res) => { setJobs(res.items); setTotal(res.total); setPage(res.page); }).catch(console.error).finally(() => setLoading(false));
   };
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(1); }, []);
+  useEffect(() => {
+    if (!jobs.some((j) => activeStatuses.has(j.status))) return;
+    const id = window.setInterval(() => load(page), 5000);
+    return () => window.clearInterval(id);
+  }, [jobs]);
 
   const stats = {
     total: jobs.length,
     completed: jobs.filter(j => j.status === "completed").length,
-    running: jobs.filter(j => j.status === "running").length,
+    running: jobs.filter(j => activeStatuses.has(j.status)).length,
     failed: jobs.filter(j => j.status === "failed").length,
   };
 
@@ -45,7 +43,7 @@ export function Dashboard() {
         {[
           { label: "Total Jobs", value: stats.total, color: "hsl(var(--accent))" },
           { label: "Completed", value: stats.completed, color: "hsl(var(--success))" },
-          { label: "Running", value: stats.running, color: "hsl(var(--warning))" },
+          { label: "Active", value: stats.running, color: "hsl(var(--warning))" },
           { label: "Failed", value: stats.failed, color: "hsl(var(--danger))" },
         ].map(s => (
           <div key={s.label} className="card flex flex-col gap-1">
@@ -58,7 +56,7 @@ export function Dashboard() {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold tracking-tight" style={{ color: "hsl(var(--text-primary))" }}>Recent Jobs</h2>
-          <button className="btn btn-ghost text-xs" onClick={load}>Refresh</button>
+          <button className="btn btn-ghost text-xs" onClick={() => load(page)}>Refresh</button>
         </div>
         {loading ? (
           <div style={{ color: "hsl(var(--text-muted))" }} className="text-xs py-8 text-center">Loading jobs&hellip;</div>
@@ -71,12 +69,7 @@ export function Dashboard() {
           <table>
             <thead>
               <tr>
-                <th>Job ID</th>
-                <th>Type</th>
-                <th>Target</th>
-                <th>Status</th>
-                <th>S3 Artifact</th>
-                <th></th>
+                <th>Job ID</th><th>Type</th><th>Target</th><th>Kaggle Ref</th><th>Status</th><th>Message</th><th>Artifact</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -85,27 +78,24 @@ export function Dashboard() {
                   <td className="font-mono text-xs">{j.id.slice(0, 12)}&hellip;</td>
                   <td className="font-mono text-[11px]">{j.job_type}</td>
                   <td className="text-xs">{j.target_ref}</td>
-                  <td>{jobStatusBadge(j.status)}</td>
+                  <td className="font-mono text-[11px]">{j.kaggle_ref ?? <span style={{ color: "hsl(var(--text-muted))" }}>&mdash;</span>}</td>
+                  <td><StatusBadge status={j.status} /></td>
+                  <td className="text-[11px] max-w-md truncate" title={j.message ?? ""}>{j.message ?? <span style={{ color: "hsl(var(--text-muted))" }}>&mdash;</span>}</td>
                   <td className="font-mono text-[11px]">{j.s3_object_key ? "stored" : <span style={{ color: "hsl(var(--text-muted))" }}>&mdash;</span>}</td>
-                  <td>
-                    <div className="flex gap-2">
-                      {j.status === "completed" && j.job_type !== "notebook_output_download" && (
-                        <button className="btn btn-ghost text-xs" onClick={() => { kaggleApi.download(j.id).then(load); }}>
-                          <Download size={13} /> Output
-                        </button>
-                      )}
-                      {j.s3_object_key && (
-                        <button className="btn btn-ghost text-xs" onClick={() => { kaggleApi.artifactUrl(j.id).then(r => window.open(r.url)); }}>
-                          <ExternalLink size={13} /> Open
-                        </button>
-                      )}
-                    </div>
-                  </td>
+                  <td><div className="flex gap-2">
+                    {j.status === "completed" && j.job_type !== "notebook_output_download" && !j.s3_object_key && (
+                      <button className="btn btn-ghost text-xs" onClick={() => { kaggleApi.download(j.id).then(() => load(page)); }}><Download size={13} /> Output</button>
+                    )}
+                    {j.s3_presigned_url || j.s3_object_key ? (
+                      <button className="btn btn-ghost text-xs" onClick={() => { kaggleApi.artifactUrl(j.id).then(r => window.open(r.url)); }}><ExternalLink size={13} /> Open</button>
+                    ) : null}
+                  </div></td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+        {!loading && jobs.length > 0 && <Pager page={page} pageSize={pageSize} total={total} onPage={(next) => load(next)} onPageSize={(size) => setPageSize(size)} />}
       </div>
     </div>
   );

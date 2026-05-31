@@ -14,4 +14,4 @@ class JobRepository:
     async def save(self, job: KaggleJob):
         self.session.add(job); await self.session.commit(); await self.session.refresh(job); return job
     async def stale_running(self):
-        return (await self.session.execute(select(KaggleJob).where(KaggleJob.status.in_(['pending','running'])))).scalars().all()
+        return (await self.session.execute(select(KaggleJob).where(KaggleJob.status.in_(['pending','staging','pushed','running'])))).scalars().all()

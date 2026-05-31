@@ -1,0 +1,13 @@
+{
+  "id": "jadt145/phobert-baseline-7d0bfd98",
+  "title": "PhoBERT Baseline - 7d0bfd98",
+  "code_file": "notebook.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [
+    "owner/dataset-slug"
+  ]
+}

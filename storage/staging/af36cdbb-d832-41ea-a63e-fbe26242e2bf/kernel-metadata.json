@@ -1,0 +1,13 @@
+{
+  "id": "tngthnht0077/phobert-baseline-af36cdbb",
+  "title": "PhoBERT Baseline - af36cdbb",
+  "code_file": "notebook.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [
+    "owner/dataset-slug"
+  ]
+}
