@@ -20,6 +20,9 @@ class JobRead(BaseModel):
     s3_object_key: str | None = None
     s3_presigned_url: str | None = None
     s3_presigned_url_expires_at: datetime | None = None
+    staging_s3_prefix: str | None = None
+    output_s3_prefix: str | None = None
+    result_metadata: dict | None = None
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None

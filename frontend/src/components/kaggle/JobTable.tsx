@@ -17,6 +17,7 @@ export function JobTable({
           <th>Target</th>
           <th>Status</th>
           <th>S3</th>
+          <th>Metrics</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -29,7 +30,8 @@ export function JobTable({
             <td>
               <StatusBadge status={j.status} />
             </td>
-            <td>{j.s3_object_key ?? "-"}</td>
+            <td>{j.s3_object_key ?? j.output_s3_prefix ?? j.staging_s3_prefix ?? "-"}</td>
+            <td>{j.result_metadata && typeof j.result_metadata === "object" && "metrics" in j.result_metadata ? Object.keys((j.result_metadata.metrics as Record<string, unknown>) ?? {}).slice(0, 3).join(", ") || "-" : "-"}</td>
             <td>
               <button
                 className="btn"

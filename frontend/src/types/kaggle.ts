@@ -23,6 +23,9 @@ export type Job = {
   s3_object_key?: string | null;
   s3_presigned_url?: string | null;
   s3_presigned_url_expires_at?: string | null;
+  staging_s3_prefix?: string | null;
+  output_s3_prefix?: string | null;
+  result_metadata?: Record<string, unknown> | null;
   created_at: string;
   started_at?: string | null;
   finished_at?: string | null;

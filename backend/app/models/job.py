@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..database import Base
 
@@ -22,6 +22,9 @@ class KaggleJob(Base):
     s3_object_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     s3_presigned_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     s3_presigned_url_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    staging_s3_prefix: Mapped[str | None] = mapped_column(Text, nullable=True)
+    output_s3_prefix: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

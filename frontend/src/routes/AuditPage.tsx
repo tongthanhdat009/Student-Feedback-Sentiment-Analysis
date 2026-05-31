@@ -12,6 +12,11 @@ function formatTime(value?: string | null) {
   return new Date(value).toLocaleString();
 }
 
+function metricsOf(job: Job) {
+  const metadata = job.result_metadata as { metrics?: Record<string, unknown>; source_file?: string; warnings?: string[] } | null | undefined;
+  return metadata;
+}
+
 export function AuditPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [total, setTotal] = useState(0);
@@ -120,6 +125,7 @@ export function AuditPage() {
                   <th>Message</th>
                   <th>Runtime</th>
                   <th>Artifact</th>
+                  <th>Metrics</th>
                   <th></th>
                 </tr>
               </thead>
@@ -140,7 +146,21 @@ export function AuditPage() {
                       <div>poll: {formatTime(job.last_polled_at)}</div>
                       <div>end: {formatTime(job.finished_at)}</div>
                     </td>
-                    <td className="font-mono text-[11px]">{job.s3_object_key ? "stored" : "—"}</td>
+                    <td className="font-mono text-[11px]">
+                      <div>{job.s3_object_key ? "stored" : "-"}</div>
+                      {job.staging_s3_prefix && <div title={job.staging_s3_prefix}>staging: s3</div>}
+                      {job.output_s3_prefix && <div title={job.output_s3_prefix}>outputs: s3</div>}
+                    </td>
+                    <td className="text-[11px] min-w-44">
+                      {metricsOf(job)?.metrics && Object.keys(metricsOf(job)?.metrics ?? {}).length ? (
+                        <div className="space-y-1">
+                          {Object.entries(metricsOf(job)?.metrics ?? {}).slice(0, 4).map(([key, value]) => (
+                            <div key={key}><span className="font-mono">{key}</span>: {String(value)}</div>
+                          ))}
+                          <div className="font-mono" style={{ color: "hsl(var(--text-muted))" }}>{String(metricsOf(job)?.source_file ?? "")}</div>
+                        </div>
+                      ) : "-"}
+                    </td>
                     <td>
                       <div className="flex gap-2">
                         {job.status === "completed" && job.job_type !== "notebook_output_download" && !job.s3_object_key && (

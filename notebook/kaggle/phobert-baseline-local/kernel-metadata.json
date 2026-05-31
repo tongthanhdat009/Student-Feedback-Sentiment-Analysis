@@ -1,0 +1,11 @@
+{
+  "id": "<kaggle_username>/phobert-baseline-local",
+  "title": "PhoBERT Baseline Local",
+  "code_file": "notebook.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": ["owner/dataset-slug"]
+}
