@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from app.services.notebook_inventory import NotebookInventory
 from app.services.notebook_staging import NotebookStaging
 
@@ -19,7 +21,7 @@ def test_stage_copies_and_rewrites_metadata(tmp_path):
     source_root.mkdir()
     source = make_folder(source_root)
     staging_root = tmp_path / 'staging'
-    staging, kaggle_ref, timeout = NotebookStaging(str(staging_root), NotebookInventory(str(source_root))).stage('demo', '12345678-abcd', 'alice')
+    staging, kaggle_ref, timeout = NotebookStaging(str(staging_root), NotebookInventory(str(source_root))).stage('demo', '12345678-abcd', 'alice', 'alice/uit-vsfc-processed')
     assert staging == staging_root / '12345678-abcd'
     assert kaggle_ref == 'alice/demo-12345678'
     assert timeout == 123
@@ -29,4 +31,14 @@ def test_stage_copies_and_rewrites_metadata(tmp_path):
     source_meta = json.loads((source / 'kernel-metadata.json').read_text(encoding='utf-8'))
     assert staged_meta['id'] == 'alice/demo-12345678'
     assert staged_meta['title'] == 'Demo - 12345678'
+    assert staged_meta['dataset_sources'] == ['alice/uit-vsfc-processed']
     assert source_meta['id'] == 'old/demo'
+
+
+def test_stage_rejects_placeholder_dataset(tmp_path):
+    source_root = tmp_path / 'notebooks'
+    source_root.mkdir()
+    make_folder(source_root)
+    staging_root = tmp_path / 'staging'
+    with pytest.raises(ValueError, match='owner/dataset-slug'):
+        NotebookStaging(str(staging_root), NotebookInventory(str(source_root))).stage('demo', '12345678-abcd', 'alice', 'owner/dataset-slug')

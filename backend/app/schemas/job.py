@@ -5,6 +5,7 @@ class NotebookTriggerRequest(BaseModel):
     account: str | None = None
     accounts: list[str] | None = None
     notebook_id: str
+    dataset_source: str | None = None
 class JobRead(BaseModel):
     id: UUID
     account_id: UUID | None

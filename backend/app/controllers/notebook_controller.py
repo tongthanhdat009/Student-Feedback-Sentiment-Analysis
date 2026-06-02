@@ -24,7 +24,7 @@ async def list_remote(account: str, session: AsyncSession=Depends(get_session)):
 async def trigger(req: NotebookTriggerRequest, session: AsyncSession=Depends(get_session)):
     accounts = req.accounts or ([req.account] if req.account else [])
     if not accounts: raise HTTPException(422, 'At least one account is required')
-    jobs = await NotebookService(session).trigger_many(accounts, req.notebook_id)
+    jobs = await NotebookService(session).trigger_many(accounts, req.notebook_id, req.dataset_source)
     return jobs[0] if len(jobs) == 1 else jobs
 @router.get('/status/{owner}/{slug}')
 async def status(owner: str, slug: str, account: str, session: AsyncSession=Depends(get_session)):

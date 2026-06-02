@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
-import { Activity, ClipboardList, MonitorPlay, Users, Server, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Activity, ClipboardList, Database, MonitorPlay, Users, Server, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Dashboard } from "./routes/Dashboard";
 import { AccountsPage } from "./routes/AccountsPage";
 import { NotebooksPage } from "./routes/NotebooksPage";
+import { DatasetsPage } from "./routes/DatasetsPage";
 import { AuditPage } from "./routes/AuditPage";
 import { Toaster } from "./components/kaggle/Toast";
 
-type Page = "dashboard" | "accounts" | "notebooks" | "audit";
+type Page = "dashboard" | "accounts" | "notebooks" | "datasets" | "audit";
 
 const NAV: { id: Page; path: string; label: string; icon: typeof Activity }[] = [
   { id: "dashboard", path: "/", label: "Overview", icon: Activity },
   { id: "notebooks", path: "/notebooks", label: "Notebooks", icon: MonitorPlay },
+  { id: "datasets", path: "/datasets", label: "Datasets", icon: Database },
   { id: "audit", path: "/audit", label: "Audit", icon: ClipboardList },
   { id: "accounts", path: "/accounts", label: "Accounts", icon: Users },
 ];
@@ -39,6 +41,7 @@ export default function App() {
   const content =
     page === "accounts" ? <AccountsPage /> :
     page === "notebooks" ? <NotebooksPage /> :
+    page === "datasets" ? <DatasetsPage /> :
     page === "audit" ? <AuditPage /> :
     <Dashboard />;
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Edit3, FileText, Plus, Play, RefreshCw } from "lucide-react";
 import { kaggleApi } from "../api/kaggleApi";
-import type { Account, Notebook } from "../types/kaggle";
+import type { Account, Dataset, Notebook } from "../types/kaggle";
 import { SideDrawer } from "../components/kaggle/SideDrawer";
 import { Pager } from "../components/kaggle/Pager";
 import { toast } from "../components/kaggle/Toast";
@@ -9,18 +9,20 @@ import { toast } from "../components/kaggle/Toast";
 export function NotebooksPage() {
   const [items, setItems] = useState<Notebook[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [drawer, setDrawer] = useState<{ type: "trigger" | "new" | "edit"; notebook?: Notebook } | null>(null);
   const [pageSize, setPageSize] = useState(10);
+  const [datasetSource, setDatasetSource] = useState("");
 
   const load = (nextPage = page) => {
     setLoading(true);
-    Promise.all([kaggleApi.inventory(nextPage, pageSize), kaggleApi.accounts(1, 100)])
-      .then(([notebooks, accountPage]) => {
-        setItems(notebooks.items); setTotal(notebooks.total); setPage(notebooks.page); setAccounts(accountPage.items);
+    Promise.all([kaggleApi.inventory(nextPage, pageSize), kaggleApi.accounts(1, 100), kaggleApi.datasets(1, 100, true)])
+      .then(([notebooks, accountPage, datasetPage]) => {
+        setItems(notebooks.items); setTotal(notebooks.total); setPage(notebooks.page); setAccounts(accountPage.items); setDatasets(datasetPage.items);
         setSelectedAccounts((current) => current.length ? current : (accountPage.items[0]?.name ? [accountPage.items[0].name] : []));
       })
       .catch(console.error).finally(() => setLoading(false));
@@ -30,10 +32,11 @@ export function NotebooksPage() {
   const toggleAccount = (name: string) => setSelectedAccounts((current) => current.includes(name) ? current.filter((item) => item !== name) : [...current, name]);
   const trigger = () => {
     const notebook = drawer?.notebook;
-    if (!notebook || !selectedAccounts.length || !notebook.valid) return;
-    kaggleApi.trigger({ accounts: selectedAccounts, notebook_id: notebook.slug }).then((result) => {
+    const normalizedDatasetSource = datasetSource.trim();
+    if (!notebook || !selectedAccounts.length || !notebook.valid || !normalizedDatasetSource) return;
+    kaggleApi.trigger({ accounts: selectedAccounts, notebook_id: notebook.slug, dataset_source: normalizedDatasetSource }).then((result) => {
       const count = Array.isArray(result) ? result.length : 1;
-      toast.success(`${count} job(s) queued`); setDrawer(null);
+      toast.success(`${count} job(s) queued`); setDatasetSource(""); setDrawer(null);
     }).catch((err) => toast.error(String(err)));
   };
 
@@ -56,7 +59,7 @@ export function NotebooksPage() {
               <td><span className={n.valid ? "badge badge-success" : "badge badge-danger"}>{n.valid ? "valid" : "invalid"}</span>{!n.valid && <ul className="mt-2 text-[11px]" style={{ color: "hsl(var(--danger))" }}>{n.errors.map((e) => <li key={e}>• {e}</li>)}</ul>}</td>
               <td className="font-mono text-[11px]">{n.manifest.default_accelerator ?? "-"}</td>
               <td>{(n.manifest.tags ?? []).map((tag) => <span key={tag} className="badge badge-muted mr-1">{tag}</span>)}</td>
-              <td><div className="flex justify-end gap-2"><button className="btn btn-ghost text-xs" onClick={() => setDrawer({ type: "edit", notebook: n })}><Edit3 size={13} /> Edit</button><button className="btn text-xs" disabled={!n.valid} onClick={() => setDrawer({ type: "trigger", notebook: n })}><Play size={13} /> Trigger</button></div></td>
+              <td><div className="flex justify-end gap-2"><button className="btn btn-ghost text-xs" onClick={() => setDrawer({ type: "edit", notebook: n })}><Edit3 size={13} /> Edit</button><button className="btn text-xs" disabled={!n.valid} onClick={() => { setDatasetSource(""); setDrawer({ type: "trigger", notebook: n }); }}><Play size={13} /> Trigger</button></div></td>
             </tr>)}
           </tbody></table>
           <Pager page={page} pageSize={pageSize} total={total} onPage={(next) => load(next)} onPageSize={(size) => setPageSize(size)} />
@@ -67,7 +70,15 @@ export function NotebooksPage() {
         {drawer?.type === "trigger" ? <div className="space-y-4">
           <p className="text-sm" style={{ color: "hsl(var(--text-secondary))" }}>Select one or more accounts. A separate job and unique Kaggle ref will be created for each account.</p>
           <div className="space-y-2">{accounts.map((a) => <label key={a.id} className="flex items-center justify-between rounded-lg border p-3 text-sm" style={{ borderColor: "hsl(var(--border))" }}><span>{a.name} <span className="font-mono text-[11px]" style={{ color: "hsl(var(--text-muted))" }}>({a.kaggle_username})</span></span><input type="checkbox" checked={selectedAccounts.includes(a.name)} onChange={() => toggleAccount(a.name)} /></label>)}</div>
-          <button className="btn w-full" disabled={!selectedAccounts.length} onClick={trigger}><Play size={14} /> Queue {selectedAccounts.length || 0} job(s)</button>
+          <label className="block space-y-2 text-sm" style={{ color: "hsl(var(--text-secondary))" }}>
+            <span>Dataset source</span>
+            <select className="input w-full font-mono text-xs" value={datasetSource} onChange={(event) => setDatasetSource(event.target.value)}>
+              <option value="">Select dataset...</option>
+              {datasets.map((dataset) => <option key={dataset.id} value={dataset.dataset_ref}>{dataset.slug} — {dataset.dataset_ref}</option>)}
+            </select>
+            <span className="block text-[11px]" style={{ color: "hsl(var(--text-muted))" }}>{datasets.length ? "Required. Loaded from dataset DB." : "No active datasets. Create one in Datasets first."}</span>
+          </label>
+          <button className="btn w-full" disabled={!selectedAccounts.length || !datasetSource.trim()} onClick={trigger}><Play size={14} /> Queue {selectedAccounts.length || 0} job(s)</button>
         </div> : <div className="space-y-4"><p className="text-sm" style={{ color: "hsl(var(--text-secondary))" }}>Notebook files live in <code>notebook/kaggle/&lt;slug&gt;</code>. Add/edit currently requires creating or updating <code>notebook.yaml</code>, <code>notebook.ipynb</code>, and <code>kernel-metadata.json</code> on disk.</p><div className="rounded-lg border p-4 text-xs" style={{ borderColor: "hsl(var(--border))", color: "hsl(var(--text-muted))" }}>{drawer?.notebook ? JSON.stringify(drawer.notebook.manifest, null, 2) : "Backend file-management endpoint not implemented yet."}</div></div>}
       </SideDrawer>
     </div>

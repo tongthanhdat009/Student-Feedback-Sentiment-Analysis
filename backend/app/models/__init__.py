@@ -1,3 +1,4 @@
 from .account import KaggleAccount
 from .job import KaggleJob
-__all__ = ['KaggleAccount', 'KaggleJob']
+from .dataset import KaggleDataset
+__all__ = ['KaggleAccount', 'KaggleJob', 'KaggleDataset']

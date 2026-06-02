@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     fernet_key: str = 'generate-fernet-key'
     kaggle_notebook_dir: str = '../notebook/kaggle'
     kaggle_output_dir: str = '../storage/kaggle_outputs'
-    kaggle_default_dataset_source: str = 'owner/dataset-slug'
+    kaggle_default_dataset_source: str = ''
     s3_bucket_name: str = Field('', alias='S3Storage__BucketName')
     s3_region: str = Field('', alias='S3Storage__Region')
     s3_access_key: str = Field('', alias='S3Storage__AccessKey')

@@ -28,7 +28,7 @@ class S3Service:
         key = self._object_key(object_key)
         try: self.client.upload_file(str(local_path), self.bucket, key)
         except ClientError as exc: raise RuntimeError(str(exc)) from exc
-        return key
+        return normalize_s3_key(object_key)
     def upload_directory(self, local_dir: str | Path, prefix: str) -> list[str]:
         root = Path(local_dir)
         if not root.is_dir(): raise ValueError('local_dir must be a directory')

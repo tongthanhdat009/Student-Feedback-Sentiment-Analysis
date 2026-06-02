@@ -56,3 +56,19 @@ export type Notebook = {
 
 export type PageResult<T> = { items: T[]; total: number; page: number; page_size: number };
 
+
+export type Dataset = {
+  id: string;
+  slug: string;
+  dataset_ref: string;
+  title?: string | null;
+  description?: string | null;
+  local_path?: string | null;
+  status: string;
+  last_synced_at?: string | null;
+  last_validated_at?: string | null;
+  validation_result?: Record<string, unknown> | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};

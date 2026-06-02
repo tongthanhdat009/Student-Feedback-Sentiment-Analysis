@@ -33,8 +33,19 @@ def test_bucket_name_with_prefix_maps_to_bucket_and_key_prefix(monkeypatch, tmp_
     svc = S3Service()
     keys = svc.upload_directory(tmp_path, 'kaggle-outputs/account/target/job/staging/')
     assert svc.bucket == 'shiphard-studio'
-    assert keys == ['Dat/Student-Feedback-Sentiment-Analysis/kaggle-outputs/account/target/job/staging/a.txt']
+    assert keys == ['kaggle-outputs/account/target/job/staging/a.txt']
     assert fake.uploaded[0][1] == 'shiphard-studio'
+
+
+def test_presign_accepts_logical_key_with_bucket_prefix(monkeypatch):
+    fake = FakeClient()
+    monkeypatch.setattr('app.services.s3_service.get_settings', lambda: type('S', (), {
+        's3_bucket_name':'shiphard-studio/Dat/Student-Feedback-Sentiment-Analysis','s3_default_presigned_url_expiration_in_seconds':3600,'s3_max_presigned_url_expiration_in_seconds':3600,
+        's3_region':'','s3_use_path_style':True,'s3_access_key':'','s3_secret_key':'','s3_session_token':'','s3_service_url':''})())
+    monkeypatch.setattr('app.services.s3_service.boto3.client', lambda *a, **k: fake)
+    svc = S3Service()
+    svc.presign_get('kaggle-outputs/account/artifact.zip')
+
 
 
 def test_upload_directory_rejects_unsafe_prefix(monkeypatch, tmp_path):
