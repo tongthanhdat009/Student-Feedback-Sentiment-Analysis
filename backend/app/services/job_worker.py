@@ -12,6 +12,7 @@ from ..database import AsyncSessionLocal
 from ..repositories.job_repository import JobRepository
 
 from ..repositories.account_repository import AccountRepository
+from ..repositories.notebook_deployment_repository import NotebookDeploymentRepository
 
 from ..config import get_settings
 
@@ -110,15 +111,58 @@ def choose_primary_artifact(out: Path, patterns: list[str] | None = None) -> Pat
         if match: return match
     return None
 
+
+async def download_outputs_for_job(job, acc, api):
+    out=Path(get_settings().kaggle_output_dir)/str(job.id); out.mkdir(parents=True, exist_ok=True)
+    await run_in_threadpool(api.kernels_output, job.kaggle_ref, path=str(out))
+    primary=choose_primary_artifact(out, [])
+    if not primary:
+        primary=out/'output.zip'
+        with zipfile.ZipFile(primary, 'w') as z:
+            for p in out.rglob('*'):
+                if p.is_file() and p != primary: z.write(p, p.relative_to(out))
+    svc=S3Service()
+    base_prefix = job_s3_prefix(acc.name, job.target_ref, job.id)
+    output_prefix=f'{base_prefix}/artifacts/'
+    uploaded = await run_in_threadpool(svc.upload_directory, out, output_prefix)
+    obj=f'{output_prefix}{primary.relative_to(out).as_posix()}'
+    if obj not in uploaded: obj=await run_in_threadpool(svc.upload_file, primary, obj)
+    results = parse_training_results(out)
+    results['artifacts'] = uploaded
+    metadata_dir = out / '_metadata'; metadata_dir.mkdir(exist_ok=True)
+    normalized = metadata_dir / 'training_results.json'
+    normalized.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding='utf-8')
+    await run_in_threadpool(svc.upload_file, normalized, f'{base_prefix}/metadata/training_results.json')
+    url, exp = await run_in_threadpool(svc.presign_get, obj)
+    job.output_path=str(out); job.output_s3_prefix=output_prefix; job.result_metadata=results; job.s3_object_key=obj; job.s3_presigned_url=url; job.s3_presigned_url_expires_at=exp
+    return job
+
 class JobWorker:
 
     poll_interval_seconds = 30
 
     status_not_found_grace_seconds = 180
 
-    def enqueue_trigger(self, job_id): asyncio.create_task(self._run_trigger(job_id))
+    def __init__(self):
+        self._tasks: set[asyncio.Task] = set()
+        self._semaphore = asyncio.Semaphore(max(1, get_settings().max_kaggle_jobs))
 
-    def enqueue_download(self, job_id): asyncio.create_task(self._run_download(job_id))
+    def _track(self, task: asyncio.Task) -> asyncio.Task:
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        return task
+
+    def enqueue_trigger(self, job_id): self._track(asyncio.create_task(self._run_trigger(job_id)))
+
+    def enqueue_download(self, job_id): self._track(asyncio.create_task(self._run_download(job_id)))
+
+    def enqueue_resume(self, job_id): self._track(asyncio.create_task(self._resume_remote_job(job_id)))
+
+    async def shutdown(self):
+        tasks = list(self._tasks)
+        for task in tasks: task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def recover(self):
 
@@ -128,11 +172,15 @@ class JobWorker:
 
             for job in await repo.stale_running():
 
-                if job.status in ['running','staging','pushed']:
+                if job.status == 'pending':
+                    self.enqueue_trigger(job.id)
 
-                    job.status='failed'; job.message='Interrupted by server restart'; job.finished_at=now(); await repo.save(job)
+                elif job.status in ['running','pushed'] and job.kaggle_ref:
+                    self.enqueue_resume(job.id)
 
-                elif job.status == 'pending': self.enqueue_trigger(job.id)
+                elif job.status in ['running','staging','pushed']:
+
+                    job.status='failed'; job.message='Interrupted by server restart before Kaggle ref was available'; job.finished_at=now(); await repo.save(job)
 
 
 
@@ -185,133 +233,108 @@ class JobWorker:
 
 
 
-    async def _run_trigger(self, job_id):
+    async def _finalize_remote_job(self, s, repo, job, acc, api, deployment=None):
+        async for mapped, raw in self._poll_kernel(api, job.kaggle_ref, job.timeout_seconds or 3600):
+            job.status=mapped; job.last_polled_at=now(); job.message=str(raw); await repo.save(job)
+            if mapped in {'completed','failed'}: break
+        if job.status == 'completed':
+            job.message='Kaggle run completed; downloading outputs to S3'; await repo.save(job)
+            await download_outputs_for_job(job, acc, api)
+            job.status='completed'; job.message='Completed and uploaded outputs to S3'
+            if deployment:
+                deployment.last_triggered_at=now(); deployment.last_status='completed'; await NotebookDeploymentRepository(s).save(deployment)
+        elif deployment:
+            deployment.last_status=job.status; await NotebookDeploymentRepository(s).save(deployment)
 
-        async with AsyncSessionLocal() as s:
-
-            repo=JobRepository(s); job=await repo.get(job_id)
-
-            if not job: return
-            folder = None
-            job.status='staging'; job.started_at=now(); await repo.save(job)
-            try:
-                acc=await AccountRepository(s).get(job.account_id)
-
-                if not acc and job.message:
-
-                    acc=await AccountRepository(s).get_by_name(job.message)
-
-                if not acc: raise RuntimeError('Account not found')
-
-                from ..utils.encryption import EncryptionService
-
-                key=EncryptionService(get_settings().fernet_key).decrypt(acc.kaggle_key_encrypted)
-
-                api=await run_in_threadpool(KaggleClientFactory().create, acc.kaggle_username, key)
-
-                dataset_source = (job.result_metadata or {}).get('dataset_source')
-                folder, kaggle_ref, timeout_seconds = NotebookStaging().stage(job.target_ref, job.id, acc.kaggle_username, dataset_source)
-                job.staging_path=str(folder); job.kaggle_ref=kaggle_ref; job.timeout_seconds=timeout_seconds or 3600; await repo.save(job)
-                staging_prefix = f'{job_s3_prefix(acc.name, job.target_ref, job.id)}/staging/'
+    async def _resume_remote_job(self, job_id):
+        async with self._semaphore:
+            async with AsyncSessionLocal() as s:
+                repo=JobRepository(s); job=await repo.get(job_id)
+                if not job or not job.kaggle_ref: return
                 try:
-                    uploaded_staging = await run_in_threadpool(S3Service().upload_directory, folder, staging_prefix)
+                    acc=await AccountRepository(s).get(job.account_id)
+                    if not acc and job.message:
+                        acc=await AccountRepository(s).get_by_name(job.message)
+                    if not acc: raise RuntimeError('Account not found')
+                    from ..utils.encryption import EncryptionService
+                    key=EncryptionService(get_settings().fernet_key).decrypt(acc.kaggle_key_encrypted)
+                    api=await run_in_threadpool(KaggleClientFactory().create, acc.kaggle_username, key)
+                    deployment_repo = NotebookDeploymentRepository(s); await deployment_repo.ensure_schema()
+                    deployment = await deployment_repo.get_for(acc.id, job.target_ref)
+                    job.status='running'; job.message='Recovered after restart; resuming Kaggle polling'; await repo.save(job)
+                    await self._finalize_remote_job(s, repo, job, acc, api, deployment)
                 except Exception as exc:
-                    raise RuntimeError(f'Failed to upload staging files to S3: {exc}') from exc
-                if not uploaded_staging:
-                    raise RuntimeError('Failed to upload staging files to S3: no files were uploaded')
-                job.staging_s3_prefix = staging_prefix; job.message=f'Uploaded {len(uploaded_staging)} staging file(s) to S3: {staging_prefix}'; await repo.save(job)
-                push_response = await run_in_threadpool(api.kernels_push, str(folder))
+                    job.status='failed'; job.message=format_job_error(exc)
+                job.finished_at=now(); await repo.save(job)
 
-                job.status='pushed'; job.message=f'Pushed {kaggle_ref}: {push_response}'; await repo.save(job)
-
-                async for mapped, raw in self._poll_kernel(api, kaggle_ref, job.timeout_seconds or 3600):
-
-                    job.status=mapped; job.last_polled_at=now(); job.message=str(raw); await repo.save(job)
-
-                    if mapped in {'completed','failed'}: break
-
-            except Exception as exc:
-                job.status='failed'; job.message=format_job_error(exc)
-            finally:
-                if folder:
-                    await run_in_threadpool(shutil.rmtree, folder, True)
-                    job.staging_path = None
-            job.finished_at=now(); await repo.save(job)
+    async def _run_trigger(self, job_id):
+        async with self._semaphore:
+            async with AsyncSessionLocal() as s:
+                repo=JobRepository(s); job=await repo.get(job_id)
+                if not job: return
+                folder = None
+                job.status='staging'; job.started_at=now(); await repo.save(job)
+                try:
+                    acc=await AccountRepository(s).get(job.account_id)
+                    if not acc and job.message:
+                        acc=await AccountRepository(s).get_by_name(job.message)
+                    if not acc: raise RuntimeError('Account not found')
+                    from ..utils.encryption import EncryptionService
+                    key=EncryptionService(get_settings().fernet_key).decrypt(acc.kaggle_key_encrypted)
+                    api=await run_in_threadpool(KaggleClientFactory().create, acc.kaggle_username, key)
+                    deployment_repo = NotebookDeploymentRepository(s); await deployment_repo.ensure_schema()
+                    deployment = await deployment_repo.get_for(acc.id, job.target_ref)
+                    if not deployment:
+                        raise RuntimeError('Notebook is not synced to this account. Sync first from Notebook Inventory.')
+                    dataset_source = (job.result_metadata or {}).get('dataset_source')
+                    folder, kaggle_ref, timeout_seconds = NotebookStaging().stage(
+                        job.target_ref, job.id, acc.kaggle_username, dataset_source,
+                        fixed_kaggle_ref=deployment.kaggle_ref, remote_slug=deployment.remote_slug,
+                        title=deployment.remote_title, append_job_suffix=False, require_dataset_source=False,
+                    )
+                    job.staging_path=str(folder); job.kaggle_ref=kaggle_ref; job.timeout_seconds=timeout_seconds or 3600; await repo.save(job)
+                    staging_prefix = f'{job_s3_prefix(acc.name, job.target_ref, job.id)}/staging/'
+                    try:
+                        uploaded_staging = await run_in_threadpool(S3Service().upload_directory, folder, staging_prefix)
+                    except Exception as exc:
+                        raise RuntimeError(f'Failed to upload staging files to S3: {exc}') from exc
+                    if not uploaded_staging:
+                        raise RuntimeError('Failed to upload staging files to S3: no files were uploaded')
+                    job.staging_s3_prefix = staging_prefix; job.message=f'Uploaded {len(uploaded_staging)} staging file(s) to S3: {staging_prefix}'; await repo.save(job)
+                    push_response = await run_in_threadpool(api.kernels_push, str(folder), str(job.timeout_seconds or 3600), 'NvidiaTeslaT4')
+                    job.status='pushed'; job.message=f'Pushed {kaggle_ref}: {push_response}'; await repo.save(job)
+                    await self._finalize_remote_job(s, repo, job, acc, api, deployment)
+                except Exception as exc:
+                    job.status='failed'; job.message=format_job_error(exc)
+                finally:
+                    if folder:
+                        await run_in_threadpool(shutil.rmtree, folder, True)
+                        job.staging_path = None
+                job.finished_at=now(); await repo.save(job)
 
     async def _run_download(self, job_id):
-
-        async with AsyncSessionLocal() as s:
-
-            repo=JobRepository(s); job=await repo.get(job_id)
-
-            if not job: return
-
-            if not job.kaggle_ref:
-
-                job.status='failed'; job.message='Kaggle ref missing'; job.finished_at=now(); await repo.save(job); return
-
-            job.status='running'; job.started_at=now(); await repo.save(job)
-
-            try:
-
-                acc=await AccountRepository(s).get(job.account_id)
-
-                if not acc and job.message:
-
-                    acc=await AccountRepository(s).get_by_name(job.message)
-
-                if not acc: raise RuntimeError('Account not found')
-
-                from ..utils.encryption import EncryptionService
-
-                key=EncryptionService(get_settings().fernet_key).decrypt(acc.kaggle_key_encrypted)
-
-                api=await run_in_threadpool(KaggleClientFactory().create, acc.kaggle_username, key)
-
-                remote_status = await run_in_threadpool(get_kernel_status, api, job.kaggle_ref)
-
-                if normalize_kaggle_status(remote_status) != 'completed':
-
-                    raise RuntimeError(f'Kaggle output not ready: {remote_status}')
-
-                out=Path(get_settings().kaggle_output_dir)/str(job.id); out.mkdir(parents=True, exist_ok=True)
-
-                await run_in_threadpool(api.kernels_output, job.kaggle_ref, path=str(out))
-
-                patterns = []
-                manifest_path = Path(job.staging_path or '') / 'notebook.yaml'
-                if manifest_path.exists():
-                    try:
-                        import yaml
-                        manifest = yaml.safe_load(manifest_path.read_text(encoding='utf-8')) or {}
-                        patterns = list(manifest.get('artifacts') or [])
-                    except Exception:
-                        patterns = []
-                primary=choose_primary_artifact(out, patterns)
-                if not primary:
-                    primary=out/'output.zip'
-                    with zipfile.ZipFile(primary, 'w') as z:
-                        for p in out.rglob('*'):
-                            if p.is_file() and p != primary: z.write(p, p.relative_to(out))
-                svc=S3Service()
-                base_prefix = job_s3_prefix(acc.name, job.target_ref, job.id)
-                output_prefix=f'{base_prefix}/artifacts/'
-                uploaded = await run_in_threadpool(svc.upload_directory, out, output_prefix)
-                obj=f'{output_prefix}{primary.relative_to(out).as_posix()}'
-                if obj not in uploaded: obj=await run_in_threadpool(svc.upload_file, primary, obj)
-                results = parse_training_results(out)
-                results['artifacts'] = uploaded
-                metadata_dir = out / '_metadata'; metadata_dir.mkdir(exist_ok=True)
-                normalized = metadata_dir / 'training_results.json'
-                normalized.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding='utf-8')
-                await run_in_threadpool(svc.upload_file, normalized, f'{base_prefix}/metadata/training_results.json')
-                url, exp = await run_in_threadpool(svc.presign_get, obj)
-                job.output_path=str(out); job.output_s3_prefix=output_prefix; job.result_metadata=results; job.s3_object_key=obj; job.s3_presigned_url=url; job.s3_presigned_url_expires_at=exp; job.status='completed'
-
-            except Exception as exc:
-
-                job.status='failed'; job.message=format_job_error(exc)
-
-            job.finished_at=now(); await repo.save(job)
+        async with self._semaphore:
+            async with AsyncSessionLocal() as s:
+                repo=JobRepository(s); job=await repo.get(job_id)
+                if not job: return
+                if not job.kaggle_ref:
+                    job.status='failed'; job.message='Kaggle ref missing'; job.finished_at=now(); await repo.save(job); return
+                job.status='running'; job.started_at=now(); await repo.save(job)
+                try:
+                    acc=await AccountRepository(s).get(job.account_id)
+                    if not acc and job.message:
+                        acc=await AccountRepository(s).get_by_name(job.message)
+                    if not acc: raise RuntimeError('Account not found')
+                    from ..utils.encryption import EncryptionService
+                    key=EncryptionService(get_settings().fernet_key).decrypt(acc.kaggle_key_encrypted)
+                    api=await run_in_threadpool(KaggleClientFactory().create, acc.kaggle_username, key)
+                    remote_status = await run_in_threadpool(get_kernel_status, api, job.kaggle_ref)
+                    if normalize_kaggle_status(remote_status) != 'completed':
+                        raise RuntimeError(f'Kaggle output not ready: {remote_status}')
+                    await download_outputs_for_job(job, acc, api)
+                    job.status='completed'
+                except Exception as exc:
+                    job.status='failed'; job.message=format_job_error(exc)
+                job.finished_at=now(); await repo.save(job)
 
 worker = JobWorker()

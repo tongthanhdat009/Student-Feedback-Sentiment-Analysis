@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     kaggle_notebook_dir: str = '../notebook/kaggle'
     kaggle_output_dir: str = '../storage/kaggle_outputs'
     kaggle_default_dataset_source: str = ''
+    max_kaggle_jobs: int = 2
     s3_bucket_name: str = Field('', alias='S3Storage__BucketName')
     s3_region: str = Field('', alias='S3Storage__Region')
     s3_access_key: str = Field('', alias='S3Storage__AccessKey')

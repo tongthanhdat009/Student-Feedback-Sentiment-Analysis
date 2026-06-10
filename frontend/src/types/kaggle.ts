@@ -72,3 +72,29 @@ export type Dataset = {
   created_at: string;
   updated_at: string;
 };
+
+
+export type NotebookDeployment = {
+  id: string;
+  account_id: string;
+  notebook_id: string;
+  kaggle_ref: string;
+  remote_slug: string;
+  remote_title?: string | null;
+  source_path?: string | null;
+  is_active: boolean;
+  last_synced_at?: string | null;
+  last_triggered_at?: string | null;
+  last_status?: string | null;
+  deployment_metadata?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NotebookSyncRequest = {
+  account: string;
+  remote_slug?: string;
+  title?: string;
+  dataset_sources?: string[];
+  enable_gpu?: boolean;
+};

@@ -1,6 +1,6 @@
-slug: phobert-baseline-local
-title: PhoBERT Baseline
-description: Kaggle-managed copy created from notebook/PhoBERT_Baseline.ipynb
+slug: phobert-sentiwordnet
+title: PhoBERT SWN
+description: Kaggle-managed copy created from notebook/PhoBERT_Sentiwordnet_Refactored_LightFusion_TopicAnalysis.ipynb
 entry_file: notebook.ipynb
 default_accelerator: NvidiaTeslaT4
 default_timeout_seconds: 7200

@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, ExternalLink, RefreshCw, Search } from "lucide-react";
 import { kaggleApi } from "../api/kaggleApi";
 import { StatusBadge } from "../components/kaggle/StatusBadge";
 import type { Job } from "../types/kaggle";
 import { Pager } from "../components/kaggle/Pager";
+
+import { usePolling } from "../hooks/usePolling";
 
 const activeStatuses = new Set(["pending", "staging", "pushed", "running"]);
 
@@ -26,17 +28,14 @@ export function AuditPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
 
-  const load = (nextPage = page) => {
+  const load = useCallback((nextPage = page) => {
     setLoading(true);
     kaggleApi.jobs(nextPage, pageSize).then((res) => { setJobs(res.items); setTotal(res.total); setPage(res.page); }).catch(console.error).finally(() => setLoading(false));
-  };
+  }, [page, pageSize]);
 
-  useEffect(() => { void load(1); }, []);
-  useEffect(() => {
-    if (!jobs.some((job) => activeStatuses.has(job.status))) return;
-    const id = window.setInterval(() => load(page), 5000);
-    return () => window.clearInterval(id);
-  }, [jobs]);
+  useEffect(() => { void load(1); }, [load]);
+  const hasActiveJobs = jobs.some((job) => activeStatuses.has(job.status));
+  usePolling(hasActiveJobs, () => load(page), 5000);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

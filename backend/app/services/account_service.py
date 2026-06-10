@@ -10,7 +10,8 @@ class AccountService:
     def __init__(self, session: AsyncSession):
         self.repo = AccountRepository(session)
         self.crypto = EncryptionService(get_settings().fernet_key)
-    async def list_accounts(self): return await self.repo.list()
+    async def list_accounts(self, limit: int | None = None, offset: int = 0): return await self.repo.list(limit=limit, offset=offset)
+    async def count_accounts(self): return await self.repo.count()
     async def create_account(self, data: AccountCreate):
         if await self.repo.get_by_name(data.name): raise HTTPException(409, 'Account exists')
         return await self.repo.add(KaggleAccount(name=data.name, kaggle_username=data.kaggle_username, kaggle_key_encrypted=self.crypto.encrypt(data.kaggle_key)))

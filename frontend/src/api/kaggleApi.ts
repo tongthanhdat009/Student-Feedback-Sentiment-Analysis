@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { Account, Dataset, Job, Notebook, PageResult } from "../types/kaggle";
+import type { Account, Dataset, Job, Notebook, NotebookDeployment, NotebookSyncRequest, PageResult } from "../types/kaggle";
 export const kaggleApi = {
   health: () => api<{ ok: boolean }>("/api/kaggle/health", { headers: {} }),
   accounts: (page = 1, pageSize = 20) => api<PageResult<Account>>(`/api/kaggle/accounts?page=${page}&page_size=${pageSize}`),
@@ -30,7 +30,11 @@ export const kaggleApi = {
   inventory: (page = 1, pageSize = 20) => api<PageResult<Notebook>>(`/api/kaggle/notebooks/inventory?page=${page}&page_size=${pageSize}`),
   validateNotebook: (slug: string) =>
     api<Notebook>(`/api/kaggle/notebooks/${slug}/validate`, { method: "POST" }),
-  trigger: (body: { account?: string; accounts?: string[]; notebook_id: string; dataset_source: string }) =>
+  deployments: (account?: string) =>
+    api<NotebookDeployment[]>(`/api/kaggle/notebooks/deployments${account ? `?account=${encodeURIComponent(account)}` : ""}`),
+  syncNotebook: (slug: string, body: NotebookSyncRequest) =>
+    api<NotebookDeployment>(`/api/kaggle/notebooks/${encodeURIComponent(slug)}/sync`, { method: "POST", body: JSON.stringify(body) }),
+  trigger: (body: { account?: string; accounts?: string[]; notebook_id: string; dataset_source?: string }) =>
     api<Job | Job[]>("/api/kaggle/notebooks/trigger", {
       method: "POST",
       body: JSON.stringify(body),

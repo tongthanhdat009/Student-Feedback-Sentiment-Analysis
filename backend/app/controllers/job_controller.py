@@ -11,9 +11,10 @@ from ..services.s3_service import S3Service
 router=APIRouter(prefix='/api/kaggle/jobs', tags=['jobs'], dependencies=[Depends(require_api_key)])
 @router.get('')
 async def list_jobs(page: int = 1, page_size: int = 20, session: AsyncSession=Depends(get_session)):
-    items = await JobRepository(session).list()
-    total = len(items); start = (page-1)*page_size; end = start+page_size
-    return {'items': items[start:end], 'total': total, 'page': page, 'page_size': page_size}
+    repo = JobRepository(session); start = (page-1)*page_size
+    items = await repo.list(limit=page_size, offset=start)
+    total = await repo.count()
+    return {'items': items, 'total': total, 'page': page, 'page_size': page_size}
 @router.get('/{job_id}', response_model=JobRead)
 async def get_job(job_id: UUID, session: AsyncSession=Depends(get_session)):
     job=await JobRepository(session).get(job_id)

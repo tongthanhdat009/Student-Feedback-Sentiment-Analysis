@@ -28,9 +28,13 @@ class DatasetService:
     async def ensure_schema(self):
         await self.repo.ensure_schema()
 
-    async def list_datasets(self, active_only: bool = False):
+    async def list_datasets(self, active_only: bool = False, limit: int | None = None, offset: int = 0):
         await self.ensure_schema()
-        return await (self.repo.list_active() if active_only else self.repo.list())
+        return await (self.repo.list_active(limit=limit, offset=offset) if active_only else self.repo.list(limit=limit, offset=offset))
+
+    async def count_datasets(self, active_only: bool = False):
+        await self.ensure_schema()
+        return await self.repo.count(active_only)
 
     async def create_dataset(self, data: DatasetCreate):
         await self.ensure_schema()

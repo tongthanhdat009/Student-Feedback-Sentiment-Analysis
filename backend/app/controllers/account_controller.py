@@ -5,13 +5,15 @@ from ..schemas.account import AccountCreate, AccountRead, AccountUpdate
 from ..services.account_service import AccountService
 from ..utils.auth import require_api_key
 from ..services.kaggle_client_factory import KaggleClientFactory
+from starlette.concurrency import run_in_threadpool
 from ..services.kaggle_quota_service import fetch_kaggle_quota
 router=APIRouter(prefix='/api/kaggle/accounts', tags=['accounts'], dependencies=[Depends(require_api_key)])
 @router.get('')
 async def list_accounts(page: int = 1, page_size: int = 20, session: AsyncSession=Depends(get_session)):
-    items = await AccountService(session).list_accounts()
-    total = len(items); start = (page-1)*page_size; end = start+page_size
-    return {'items': items[start:end], 'total': total, 'page': page, 'page_size': page_size}
+    service = AccountService(session); start = (page-1)*page_size
+    items = await service.list_accounts(limit=page_size, offset=start)
+    total = await service.count_accounts()
+    return {'items': items, 'total': total, 'page': page, 'page_size': page_size}
 @router.post('', response_model=AccountRead)
 async def create_account(data: AccountCreate, session: AsyncSession=Depends(get_session)): return await AccountService(session).create_account(data)
 @router.patch('/{name}', response_model=AccountRead)
@@ -21,14 +23,14 @@ async def delete_account(name: str, session: AsyncSession=Depends(get_session)):
 @router.get('/{name}/quota')
 async def account_quota(name: str, session: AsyncSession=Depends(get_session)):
     acc,key=await AccountService(session).get_credentials(name)
-    return fetch_kaggle_quota(acc.kaggle_username, key)
+    return await run_in_threadpool(fetch_kaggle_quota, acc.kaggle_username, key)
 
 @router.post('/{name}/test')
 async def test_account(name: str, session: AsyncSession=Depends(get_session)):
     acc,key=await AccountService(session).get_credentials(name)
     try:
-        api=KaggleClientFactory().create(acc.kaggle_username, key)
-        api.kernels_list(mine=True, page_size=1)
+        api=await run_in_threadpool(KaggleClientFactory().create, acc.kaggle_username, key)
+        await run_in_threadpool(api.kernels_list, mine=True, page_size=1)
     except Exception as exc:
         message = str(exc)
         if '401' in message:

@@ -1,6 +1,6 @@
 {
-  "id": "<kaggle_username>/phobert-baseline-local",
-  "title": "PhoBERT Baseline",
+  "id": "jadt145/phobert-sentiwordnet",
+  "title": "phobert-sentiwordnet",
   "code_file": "notebook.ipynb",
   "language": "python",
   "kernel_type": "notebook",
@@ -8,6 +8,6 @@
   "enable_gpu": true,
   "enable_internet": true,
   "dataset_sources": [
-    "owner/dataset-slug"
+    "jadt145/sfsa-026"
   ]
 }

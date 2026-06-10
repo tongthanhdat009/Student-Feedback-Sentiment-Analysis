@@ -6,7 +6,16 @@ from .notebook_registry import NotebookRegistry, is_safe_slug
 
 class NotebookInventory:
     def __init__(self, root: str | None = None):
-        self.root = Path(root or get_settings().kaggle_notebook_dir)
+        configured = Path(root or get_settings().kaggle_notebook_dir)
+        if not configured.is_absolute():
+            candidates = [
+                Path.cwd() / configured,
+                Path(__file__).resolve().parents[3] / configured,
+                Path(__file__).resolve().parents[3] / 'notebook' / 'kaggle',
+            ]
+            self.root = next((p for p in candidates if p.exists()), candidates[-1])
+        else:
+            self.root = configured
         self.registry = NotebookRegistry()
 
     def list(self):

@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_session
 from ..schemas.job import NotebookTriggerRequest, JobRead
+from ..schemas.notebook_deployment import NotebookSyncRequest, NotebookDeploymentRead
 from ..services.notebook_service import NotebookService
+from ..services.notebook_deployment_service import NotebookDeploymentService
 from ..utils.auth import require_api_key
 from ..services.account_service import AccountService
 from ..services.kaggle_client_factory import KaggleClientFactory
@@ -20,6 +22,15 @@ async def list_remote(account: str, session: AsyncSession=Depends(get_session)):
     acc,key=await AccountService(session).get_credentials(account)
     api=KaggleClientFactory().create(acc.kaggle_username, key)
     return api.kernels_list(user=acc.kaggle_username)
+
+@router.get('/deployments')
+async def deployments(account: str | None = None, session: AsyncSession=Depends(get_session)):
+    return await NotebookDeploymentService(session).list(account)
+
+@router.post('/{slug}/sync', response_model=NotebookDeploymentRead)
+async def sync_notebook(slug: str, req: NotebookSyncRequest, session: AsyncSession=Depends(get_session)):
+    return await NotebookDeploymentService(session).sync(slug, req.account, req.remote_slug, req.title, req.dataset_sources, req.enable_gpu)
+
 @router.post('/trigger')
 async def trigger(req: NotebookTriggerRequest, session: AsyncSession=Depends(get_session)):
     accounts = req.accounts or ([req.account] if req.account else [])

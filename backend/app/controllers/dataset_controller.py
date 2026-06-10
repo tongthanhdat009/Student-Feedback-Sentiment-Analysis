@@ -9,9 +9,10 @@ router=APIRouter(prefix='/api/kaggle/datasets', tags=['datasets'], dependencies=
 
 @router.get('')
 async def list_datasets(page: int = 1, page_size: int = 20, active_only: bool = False, session: AsyncSession=Depends(get_session)):
-    items = await DatasetService(session).list_datasets(active_only)
-    total = len(items); start = (page-1)*page_size; end = start+page_size
-    return {'items': items[start:end], 'total': total, 'page': page, 'page_size': page_size}
+    service = DatasetService(session); start = (page-1)*page_size
+    items = await service.list_datasets(active_only, limit=page_size, offset=start)
+    total = await service.count_datasets(active_only)
+    return {'items': items, 'total': total, 'page': page, 'page_size': page_size}
 
 @router.post('', response_model=DatasetRead)
 async def create_dataset(data: DatasetCreate, session: AsyncSession=Depends(get_session)):

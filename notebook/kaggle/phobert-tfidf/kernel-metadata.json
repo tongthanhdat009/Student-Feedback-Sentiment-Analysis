@@ -1,6 +1,6 @@
 {
-  "id": "<kaggle_username>/phobert-baseline-local",
-  "title": "PhoBERT Baseline",
+  "id": "<kaggle_username>/phobert-tfidf",
+  "title": "PhoBERT TFIDF LightFusion",
   "code_file": "notebook.ipynb",
   "language": "python",
   "kernel_type": "notebook",

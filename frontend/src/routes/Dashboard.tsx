@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Play, Download, ExternalLink } from "lucide-react";
 import { kaggleApi } from "../api/kaggleApi";
 import type { Job } from "../types/kaggle";
 import { Pager } from "../components/kaggle/Pager";
 import { StatusBadge } from "../components/kaggle/StatusBadge";
+
+import { usePolling } from "../hooks/usePolling";
 
 const activeStatuses = new Set(["pending", "staging", "pushed", "running"]);
 
@@ -14,16 +16,13 @@ export function Dashboard() {
   const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(true);
 
-  const load = (nextPage = page) => {
+  const load = useCallback((nextPage = page) => {
     setLoading(true);
     kaggleApi.jobs(nextPage, pageSize).then((res) => { setJobs(res.items); setTotal(res.total); setPage(res.page); }).catch(console.error).finally(() => setLoading(false));
-  };
-  useEffect(() => { void load(1); }, []);
-  useEffect(() => {
-    if (!jobs.some((j) => activeStatuses.has(j.status))) return;
-    const id = window.setInterval(() => load(page), 5000);
-    return () => window.clearInterval(id);
-  }, [jobs]);
+  }, [page, pageSize]);
+  useEffect(() => { void load(1); }, [load]);
+  const hasActiveJobs = jobs.some((j) => activeStatuses.has(j.status));
+  usePolling(hasActiveJobs, () => load(page), 5000);
 
   const stats = {
     total: jobs.length,

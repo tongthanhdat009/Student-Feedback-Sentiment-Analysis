@@ -1,5 +1,5 @@
 from uuid import UUID
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import KaggleDataset
 
@@ -34,10 +34,21 @@ class DatasetRepository:
             await self.session.execute(text(statement))
         await self.session.commit()
 
-    async def list(self):
-        return (await self.session.execute(select(KaggleDataset).order_by(KaggleDataset.slug))).scalars().all()
-    async def list_active(self):
-        return (await self.session.execute(select(KaggleDataset).where(KaggleDataset.is_active == True).order_by(KaggleDataset.slug))).scalars().all()
+    async def list(self, limit: int | None = None, offset: int = 0):
+        stmt = select(KaggleDataset).order_by(KaggleDataset.slug)
+        if limit is not None:
+            stmt = stmt.limit(limit).offset(offset)
+        return (await self.session.execute(stmt)).scalars().all()
+    async def list_active(self, limit: int | None = None, offset: int = 0):
+        stmt = select(KaggleDataset).where(KaggleDataset.is_active == True).order_by(KaggleDataset.slug)
+        if limit is not None:
+            stmt = stmt.limit(limit).offset(offset)
+        return (await self.session.execute(stmt)).scalars().all()
+    async def count(self, active_only: bool = False):
+        stmt = select(func.count()).select_from(KaggleDataset)
+        if active_only:
+            stmt = stmt.where(KaggleDataset.is_active == True)
+        return (await self.session.execute(stmt)).scalar_one()
     async def get(self, dataset_id: UUID):
         return await self.session.get(KaggleDataset, dataset_id)
     async def get_by_id_text(self, dataset_id: str):
